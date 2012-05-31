@@ -94,12 +94,10 @@ void MapManager::LoadTransports()
 
         m_Transports.insert(t);
 
-        for (std::set<uint32>::const_iterator i = mapsUsed.begin(); i != mapsUsed.end(); ++i)
-            m_TransportsByMap[*i].insert(t);
-
         //If we someday decide to use the grid to track transports, here:
+        t->setActive(true);
         t->SetMap(sMapMgr->CreateBaseMap(mapid));
-        t->AddToWorld();
+        t->GetMap()->AddToMap<GameObject>(t);
 
         ++count;
     }
@@ -491,18 +489,10 @@ void Transport::TeleportTransport(uint32 newMapid, float x, float y, float z)
     //we need to create and save new Map object with 'newMapid' because if not done -> lead to invalid Map object reference...
     //player far teleport would try to create same instance, but we need it NOW for transport...
 
-    RemoveFromWorld();
-    ResetMap();
     Map* newMap = sMapMgr->CreateBaseMap(newMapid);
+    GetMap()->RemoveFromMap<GameObject>(this, false);
     SetMap(newMap);
-    ASSERT(GetMap());
-    AddToWorld();
-
-    if (oldMap != newMap)
-    {
-        UpdateForMap(oldMap);
-        UpdateForMap(newMap);
-    }
+    GetMap()->AddToMap<GameObject>(this);
 
     for (CreatureSet::iterator itr = m_NPCPassengerSet.begin(); itr != m_NPCPassengerSet.end(); ++itr)
         (*itr)->FarTeleportTo(newMap, x, y, z, (*itr)->GetOrientation());
@@ -555,7 +545,7 @@ void Transport::Update(uint32 p_diff)
         }
         else
         {
-            Relocate(m_curr->second.x, m_curr->second.y, m_curr->second.z, GetAngle(m_next->second.x, m_next->second.y) + float(M_PI));
+            GetMap()->GameObjectRelocation(this, m_curr->second.x, m_curr->second.y, m_curr->second.z, GetAngle(m_next->second.x, m_next->second.y) + float(M_PI));
             UpdateNPCPositions(); // COME BACK MARKER
         }
 
@@ -572,39 +562,6 @@ void Transport::Update(uint32 p_diff)
     sScriptMgr->OnTransportUpdate(this, p_diff);
 }
 
-void Transport::UpdateForMap(Map const* targetMap)
-{
-    Map::PlayerList const& player = targetMap->GetPlayers();
-    if (player.isEmpty())
-        return;
-
-    if (GetMapId() == targetMap->GetId())
-    {
-        for (Map::PlayerList::const_iterator itr = player.begin(); itr != player.end(); ++itr)
-        {
-            if (this != itr->getSource()->GetTransport())
-            {
-                UpdateData transData;
-                BuildCreateUpdateBlockForPlayer(&transData, itr->getSource());
-                WorldPacket packet;
-                transData.BuildPacket(&packet);
-                itr->getSource()->SendDirectMessage(&packet);
-            }
-        }
-    }
-    else
-    {
-        UpdateData transData;
-        BuildOutOfRangeUpdateBlock(&transData);
-        WorldPacket out_packet;
-        transData.BuildPacket(&out_packet);
-
-        for (Map::PlayerList::const_iterator itr = player.begin(); itr != player.end(); ++itr)
-            if (this != itr->getSource()->GetTransport())
-                itr->getSource()->SendDirectMessage(&out_packet);
-    }
-}
-
 void Transport::DoEventIfAny(WayPointMap::value_type const& node, bool departure)
 {
     if (uint32 eventid = departure ? node.second.departureEventID : node.second.arrivalEventID)
@@ -613,20 +570,6 @@ void Transport::DoEventIfAny(WayPointMap::value_type const& node, bool departure
         GetMap()->ScriptsStart(sEventScripts, eventid, this, this);
         EventInform(eventid);
     }
-}
-
-void Transport::BuildStartMovePacket(Map const* targetMap)
-{
-    SetFlag(GAMEOBJECT_FLAGS, GO_FLAG_IN_USE);
-    SetGoState(GO_STATE_ACTIVE);
-    UpdateForMap(targetMap);
-}
-
-void Transport::BuildStopMovePacket(Map const* targetMap)
-{
-    RemoveFlag(GAMEOBJECT_FLAGS, GO_FLAG_IN_USE);
-    SetGoState(GO_STATE_READY);
-    UpdateForMap(targetMap);
 }
 
 uint32 Transport::AddNPCPassenger(uint32 tguid, uint32 entry, float x, float y, float z, float o, uint32 anim)

@@ -269,6 +269,7 @@ class Map : public GridRefManager<NGridType>
 
         void PlayerRelocation(Player*, float x, float y, float z, float orientation);
         void CreatureRelocation(Creature* creature, float x, float y, float z, float ang, bool respawnRelocationOnFail = true);
+        void GameObjectRelocation(GameObject* go, float x, float y, float z, float orientation, bool respawnRelocationOnFail = true);
 
         template<class T, class CONTAINER> void Visit(const Cell& cell, TypeContainerVisitor<T, CONTAINER> &visitor);
 
@@ -341,11 +342,13 @@ class Map : public GridRefManager<NGridType>
         }
 
         void MoveAllCreaturesInMoveList();
+        void MoveAllGameObjectsInMoveList();
         void RemoveAllObjectsInRemoveList();
         virtual void RemoveAllPlayers();
 
         // used only in MoveAllCreaturesInMoveList and ObjectGridUnloader
         bool CreatureRespawnRelocation(Creature* c, bool diffGridOnly);
+        bool GameObjectRespawnRelocation(GameObject* go, bool diffGridOnly);
 
         // assert print helper
         bool CheckGridIntegrity(Creature* c, bool moved) const;
@@ -416,7 +419,7 @@ class Map : public GridRefManager<NGridType>
 
         void RemoveFromActive(Creature* obj);
 
-        void SwitchGridContainers(Creature* creature, bool toWorldContainer);
+        template<class T> void SwitchGridContainers(T* obj, bool on);
         template<class NOTIFIER> void VisitAll(const float &x, const float &y, float radius, NOTIFIER &notifier);
         template<class NOTIFIER> void VisitFirstFound(const float &x, const float &y, float radius, NOTIFIER &notifier);
         template<class NOTIFIER> void VisitWorld(const float &x, const float &y, float radius, NOTIFIER &notifier);
@@ -453,17 +456,20 @@ class Map : public GridRefManager<NGridType>
 
         void SendInitSelf(Player* player);
 
-        void SendInitTransports(Player* player);
-        void SendRemoveTransports(Player* player);
-
         bool CreatureCellRelocation(Creature* creature, Cell new_cell);
+        bool GameObjectCellRelocation(GameObject* go, Cell new_cell);
 
         template<class T> void InitializeObject(T* obj);
         void AddCreatureToMoveList(Creature* c, float x, float y, float z, float ang);
         void RemoveCreatureFromMoveList(Creature* c);
+        void AddGameObjectToMoveList(GameObject* go, float x, float y, float z, float ang);
+        void RemoveGameObjectFromMoveList(GameObject* go);
 
         bool _creatureToMoveLock;
         std::vector<Creature*> _creaturesToMove;
+
+        bool _gameObjectsToMoveLock;
+        std::vector<GameObject*> _gameObjectsToMove;
 
         bool IsGridLoaded(const GridCoord &) const;
         void EnsureGridCreated(const GridCoord &);

@@ -49,8 +49,6 @@ class Transport : public GameObject
         void UpdateNPCPositions();
         void CalculatePassengerPosition(float& x, float& y, float& z, float& o);
         void CalculatePassengerOffset(float& x, float& y, float& z, float& o);
-        void BuildStartMovePacket(Map const* targetMap);
-        void BuildStopMovePacket(Map const* targetMap);
         uint32 GetScriptId() const { return ScriptId; }
     private:
         struct WayPoint
@@ -90,7 +88,6 @@ class Transport : public GameObject
 
     private:
         void TeleportTransport(uint32 newMapid, float x, float y, float z);
-        void UpdateForMap(Map const* map);
         void DoEventIfAny(WayPointMap::value_type const& node, bool departure);
         WayPointMap::const_iterator GetNextWayPoint();
 };

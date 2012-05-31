@@ -286,8 +286,6 @@ void MapManager::Update(uint32 diff)
         iter->second->DelayedUpdate(uint32(i_timer.GetCurrent()));
 
     sObjectAccessor->Update(uint32(i_timer.GetCurrent()));
-    for (TransportSet::iterator itr = m_Transports.begin(); itr != m_Transports.end(); ++itr)
-        (*itr)->Update(uint32(i_timer.GetCurrent()));
 
     i_timer.SetCurrent(0);
 }

@@ -2038,3 +2038,26 @@ bool GameObject::IsLootAllowedFor(Player const* player) const
 
     return true;
 }
+
+void GameObject::GetRespawnPosition(float &x, float &y, float &z, float* ori) const
+{
+    if (m_DBTableGuid)
+    {
+        if (GameObjectData const* data = sObjectMgr->GetGOData(GetDBTableGUIDLow()))
+        {
+            x = data->posX;
+            y = data->posY;
+            z = data->posZ;
+            if (ori)
+                *ori = data->orientation;
+            return;
+        }
+    }
+
+    x = GetPositionX();
+    y = GetPositionY();
+    z = GetPositionZ();
+    if (ori)
+        *ori = GetOrientation();
+}
+
