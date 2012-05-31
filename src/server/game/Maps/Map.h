@@ -52,6 +52,7 @@ struct Position;
 class Battleground;
 class MapInstanced;
 class InstanceMap;
+class Transport;
 namespace Trinity { struct ObjectUpdater; }
 
 struct ScriptAction
@@ -431,6 +432,7 @@ class Map : public GridRefManager<NGridType>
         TempSummon* SummonCreature(uint32 entry, Position const& pos, SummonPropertiesEntry const* properties = NULL, uint32 duration = 0, Unit* summoner = NULL, uint32 spellId = 0, uint32 vehId = 0);
         Creature* GetCreature(uint64 guid);
         GameObject* GetGameObject(uint64 guid);
+        Transport* GetTransport(uint64 guid);
         DynamicObject* GetDynamicObject(uint64 guid);
 
         MapInstanced* ToMapInstanced(){ if (Instanceable())  return reinterpret_cast<MapInstanced*>(this); else return NULL;  }

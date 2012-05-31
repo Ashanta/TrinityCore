@@ -298,14 +298,10 @@ void WorldSession::HandleMovementOpcodes(WorldPacket & recvData)
         if (plrMover && !plrMover->GetTransport())
         {
             // elevators also cause the client to send MOVEMENTFLAG_ONTRANSPORT - just dismount if the guid can be found in the transport list
-            for (MapManager::TransportSet::const_iterator iter = sMapMgr->m_Transports.begin(); iter != sMapMgr->m_Transports.end(); ++iter)
+            if (Transport* transport = plrMover->GetMap()->GetTransport(movementInfo.t_guid))
             {
-                if ((*iter)->GetGUID() == movementInfo.t_guid)
-                {
-                    plrMover->m_transport = (*iter);
-                    (*iter)->AddPassenger(plrMover);
-                    break;
-                }
+                plrMover->m_transport = transport;
+                transport->AddPassenger(plrMover);
             }
         }
 

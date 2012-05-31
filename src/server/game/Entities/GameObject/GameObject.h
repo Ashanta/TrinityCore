@@ -27,6 +27,7 @@
 #include "DatabaseEnv.h"
 
 class GameObjectAI;
+class Transport;
 
 // GCC have alternative #pragma pack(N) syntax and old gcc version not support pack(push, N), also any gcc version not support it at some platform
 #if defined(__GNUC__)
@@ -833,6 +834,9 @@ class GameObject : public WorldObject, public GridObject<GameObject>, public Map
 
         GameObjectModel * m_model;
         void GetRespawnPosition(float &x, float &y, float &z, float* ori) const;
+
+        Transport* ToTransport() { if (GetGOInfo()->type == GAMEOBJECT_TYPE_MO_TRANSPORT) return reinterpret_cast<Transport*>(this); else return NULL; }
+        Transport const* ToTransport() const { if (GetGOInfo()->type == GAMEOBJECT_TYPE_MO_TRANSPORT) return reinterpret_cast<Transport const*>(this); else return NULL; }
 
     protected:
         bool AIM_Initialize();

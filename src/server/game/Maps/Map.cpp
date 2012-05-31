@@ -2967,6 +2967,15 @@ GameObject* Map::GetGameObject(uint64 guid)
     return ObjectAccessor::GetObjectInMap(guid, this, (GameObject*)NULL);
 }
 
+Transport* Map::GetTransport(uint64 guid)
+{
+    if (GUID_HIPART(guid) != HIGHGUID_MO_TRANSPORT)
+        return NULL;
+
+    GameObject* go = GetGameObject(guid);
+    return go ? go->ToTransport() : NULL;
+}
+
 DynamicObject* Map::GetDynamicObject(uint64 guid)
 {
     return ObjectAccessor::GetObjectInMap(guid, this, (DynamicObject*)NULL);

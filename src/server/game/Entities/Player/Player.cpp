@@ -17020,17 +17020,15 @@ bool Player::LoadFromDB(uint32 guid, SQLQueryHolder *holder)
         }
         else
         {
-            for (MapManager::TransportSet::iterator iter = sMapMgr->m_Transports.begin(); iter != sMapMgr->m_Transports.end(); ++iter)
+            if (GameObject* go = HashMapHolder<GameObject>::Find(m_movementInfo.t_guid))
+                m_transport = go->ToTransport();
+
+            if (m_transport)
             {
-                if ((*iter)->GetGUIDLow() == transGUID)
-                {
-                    m_transport = *iter;
-                    m_transport->AddPassenger(this);
-                    mapId = (m_transport->GetMapId());
-                    break;
-                }
+                m_transport->AddPassenger(this);
+                mapId = m_transport->GetMapId();
             }
-            if (!m_transport)
+            else
             {
                 sLog->outError("Player (guidlow %d) have problems with transport guid (%u). Teleport to bind location.",
                     guid, transGUID);
