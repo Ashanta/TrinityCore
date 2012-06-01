@@ -433,7 +433,7 @@ void Object::_BuildMovementUpdate(ByteBuffer* data, uint16 flags) const
     if (flags & UPDATEFLAG_TRANSPORT)
     {
         if (GetTypeId() == TYPEID_GAMEOBJECT && ToGameObject()->GetGOInfo()->type == GAMEOBJECT_TYPE_MO_TRANSPORT)
-            *data << uint32(timer);
+            *data << uint32(ToGameObject()->ToTransport()->GetTimer());
         else
             *data << uint32(getMSTime());
     }
