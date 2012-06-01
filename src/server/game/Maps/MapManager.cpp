@@ -318,12 +318,6 @@ bool MapManager::IsValidMAP(uint32 mapid, bool startUp)
 
 void MapManager::UnloadAll()
 {
-    for (TransportSet::iterator i = m_Transports.begin(); i != m_Transports.end(); ++i)
-    {
-        (*i)->RemoveFromWorld();
-        delete *i;
-    }
-
     for (MapMapType::iterator iter = i_maps.begin(); iter != i_maps.end();)
     {
         iter->second->UnloadAll();
