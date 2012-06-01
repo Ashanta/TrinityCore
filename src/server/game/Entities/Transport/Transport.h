@@ -48,6 +48,7 @@ class Transport : public GameObject
 
         uint32 GetPeriod() const { return GetUInt32Value(GAMEOBJECT_LEVEL); }
         void SetPeriod(uint32 period) { SetUInt32Value(GAMEOBJECT_LEVEL, period); }
+        uint32 GetTimer() const { return _moveTimer; }
 
         KeyFrameVec const& GetKeyFrames() const { return _transportInfo->keyFrames; }
     private:

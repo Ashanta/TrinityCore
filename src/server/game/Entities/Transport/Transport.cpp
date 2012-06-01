@@ -105,11 +105,11 @@ void Transport::Update(uint32 diff)
         return;
 
     _moveTimer += diff;
-    _moveTimer %= GetPeriod();
-    while (_moveTimer > _nextFrame->PathTime || _moveTimer < _currentFrame->DepartureTime)
+    uint32 timer = _moveTimer % GetPeriod();
+    while (timer > _nextFrame->PathTime || timer < _currentFrame->DepartureTime)
     {
         // arrived at next stop point
-        if (_transportInfo->pathTime > _nextFrame->PathTime && _moveTimer < _nextFrame->DepartureTime)
+        if (_transportInfo->pathTime > _nextFrame->PathTime && timer < _nextFrame->DepartureTime)
         {
             if (IsMoving())
             {
@@ -139,7 +139,7 @@ void Transport::Update(uint32 diff)
 
     if (IsMoving())
     {
-        float t = CalculateSegmentPos((float)_moveTimer/(float)IN_MILLISECONDS);
+        float t = CalculateSegmentPos((float)timer/(float)IN_MILLISECONDS);
         G3D::Vector3 pos;
         _currentFrame->Spline->evaluate_percent(_currentFrame->Index, t, pos);
         GetMap()->GameObjectRelocation(this, pos.x, pos.y, pos.z, GetAngle(pos.x, pos.y) + float(M_PI));
