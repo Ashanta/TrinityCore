@@ -1158,7 +1158,7 @@ bool Map::GameObjectRespawnRelocation(GameObject* go, bool diffGridOnly)
         return true;
 
     #ifdef TRINITY_DEBUG
-        sLog->outDebug(LOG_FILTER_MAPS, "Creature (GUID: %u Entry: %u) moved from grid[%u, %u]cell[%u, %u] to respawn grid[%u, %u]cell[%u, %u].", go->GetGUIDLow(), go->GetEntry(), go->GetCurrentCell().GridX(), go->GetCurrentCell().GridY(), go->GetCurrentCell().CellX(), go->GetCurrentCell().CellY(), resp_cell.GridX(), resp_cell.GridY(), resp_cell.CellX(), resp_cell.CellY());
+        sLog->outDebug(LOG_FILTER_MAPS, "GameObject (GUID: %u Entry: %u) moved from grid[%u, %u]cell[%u, %u] to respawn grid[%u, %u]cell[%u, %u].", go->GetGUIDLow(), go->GetEntry(), go->GetCurrentCell().GridX(), go->GetCurrentCell().GridY(), go->GetCurrentCell().CellX(), go->GetCurrentCell().CellY(), resp_cell.GridX(), resp_cell.GridY(), resp_cell.CellX(), resp_cell.CellY());
     #endif
 
     // teleport it to respawn point (like normal respawn if player see)
@@ -2249,7 +2249,7 @@ void Map::SendInitSelf(Player* player)
     // build other passengers at transport also (they always visible and marked as visible and will not send at visibility update at add to map
     if (Transport* transport = player->GetTransport())
     {
-        for (Transport::PlayerSet::const_iterator itr = transport->GetPassengers().begin(); itr != transport->GetPassengers().end(); ++itr)
+        for (std::set<WorldObject*>::const_iterator itr = transport->GetPassengers().begin(); itr != transport->GetPassengers().end(); ++itr)
         {
             if (player != (*itr) && player->HaveAtClient(*itr))
             {
@@ -2420,6 +2420,13 @@ bool Map::ActiveObjectsNearGrid(NGridType const& ngrid) const
     return false;
 }
 
+template<class T>
+void Map::AddToActive(T* obj)
+{
+    AddToActiveHelper(obj);
+}
+
+template <>
 void Map::AddToActive(Creature* c)
 {
     AddToActiveHelper(c);
@@ -2441,6 +2448,35 @@ void Map::AddToActive(Creature* c)
     }
 }
 
+template <>
+void Map::AddToActive(Transport* c)
+{
+    AddToActiveHelper(c);
+
+    // also not allow unloading spawn grid to prevent creating creature clone at load
+    if (c->GetDBTableGUIDLow())
+    {
+        float x, y, z;
+        c->GetRespawnPosition(x, y, z);
+        GridCoord p = Trinity::ComputeGridCoord(x, y);
+        if (getNGrid(p.x_coord, p.y_coord))
+            getNGrid(p.x_coord, p.y_coord)->incUnloadActiveLock();
+        else
+        {
+            GridCoord p2 = Trinity::ComputeGridCoord(c->GetPositionX(), c->GetPositionY());
+            sLog->outError("Active Transport (GUID: %u Entry: %u) added to grid[%u, %u] but spawn grid[%u, %u] was not loaded.",
+                c->GetGUIDLow(), c->GetEntry(), p.x_coord, p.y_coord, p2.x_coord, p2.y_coord);
+        }
+    }
+}
+
+template<class T>
+void Map::RemoveFromActive(T* obj)
+{
+    RemoveFromActiveHelper(obj);
+}
+
+template <>
 void Map::RemoveFromActive(Creature* c)
 {
     RemoveFromActiveHelper(c);
@@ -2462,6 +2498,28 @@ void Map::RemoveFromActive(Creature* c)
     }
 }
 
+template <>
+void Map::RemoveFromActive(Transport* c)
+{
+    RemoveFromActiveHelper(c);
+
+    // also allow unloading spawn grid
+    if (c->GetDBTableGUIDLow())
+    {
+        float x, y, z;
+        c->GetRespawnPosition(x, y, z);
+        GridCoord p = Trinity::ComputeGridCoord(x, y);
+        if (getNGrid(p.x_coord, p.y_coord))
+            getNGrid(p.x_coord, p.y_coord)->decUnloadActiveLock();
+        else
+        {
+            GridCoord p2 = Trinity::ComputeGridCoord(c->GetPositionX(), c->GetPositionY());
+            sLog->outError("Active Transport (GUID: %u Entry: %u) removed from grid[%u, %u] but spawn grid[%u, %u] was not loaded.",
+                c->GetGUIDLow(), c->GetEntry(), p.x_coord, p.y_coord, p2.x_coord, p2.y_coord);
+        }
+    }
+}
+
 template bool Map::AddToMap(Corpse*);
 template bool Map::AddToMap(Creature*);
 template bool Map::AddToMap(GameObject*);
@@ -2471,6 +2529,10 @@ template void Map::RemoveFromMap(Corpse*, bool);
 template void Map::RemoveFromMap(Creature*, bool);
 template void Map::RemoveFromMap(GameObject*, bool);
 template void Map::RemoveFromMap(DynamicObject*, bool);
+
+template void Map::AddToActive(DynamicObject*);
+
+template void Map::RemoveFromActive(DynamicObject*);
 
 /* ******* Dungeon Instance Maps ******* */
 

@@ -121,12 +121,6 @@ class MapManager
 
         void DoDelayedMovesAndRemoves();
 
-        void LoadTransports();
-        void LoadTransportNPCs();
-
-        typedef std::set<Transport*> TransportSet;
-        TransportSet m_Transports;
-
         bool CanPlayerEnter(uint32 mapid, Player* player, bool loginCheck = false);
         void InitializeVisibilityDistanceInfo();
 

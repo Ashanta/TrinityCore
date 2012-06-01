@@ -410,15 +410,11 @@ class Map : public GridRefManager<NGridType>
 
         // must called with AddToWorld
         template<class T>
-        void AddToActive(T* obj) { AddToActiveHelper(obj); }
-
-        void AddToActive(Creature* obj);
+        void AddToActive(T* obj);
 
         // must called with RemoveFromWorld
         template<class T>
-        void RemoveFromActive(T* obj) { RemoveFromActiveHelper(obj); }
-
-        void RemoveFromActive(Creature* obj);
+        void RemoveFromActive(T* obj);
 
         template<class T> void SwitchGridContainers(T* obj, bool on);
         template<class NOTIFIER> void VisitAll(const float &x, const float &y, float radius, NOTIFIER &notifier);

@@ -2039,7 +2039,7 @@ bool GameObject::IsLootAllowedFor(Player const* player) const
     return true;
 }
 
-void GameObject::GetRespawnPosition(float &x, float &y, float &z, float* ori) const
+void GameObject::GetRespawnPosition(float &x, float &y, float &z, float* ori /* = NULL*/) const
 {
     if (m_DBTableGuid)
     {

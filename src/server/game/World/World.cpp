@@ -77,6 +77,7 @@
 #include "WardenCheckMgr.h"
 #include "Warden.h"
 #include "CalendarMgr.h"
+#include "TransportMgr.h"
 
 ACE_Atomic_Op<ACE_Thread_Mutex, bool> World::m_stopEvent = false;
 uint8 World::m_ExitCode = SHUTDOWN_EXIT_CODE;
@@ -1323,6 +1324,9 @@ void World::SetInitialWorldSettings()
     sLog->outString("Loading Game Object Templates...");         // must be after LoadPageTexts
     sObjectMgr->LoadGameObjectTemplate();
 
+    sLog->outString("Loading Transport templates...");
+    sTransportMgr->LoadTransportTemplates();
+
     sLog->outString("Loading Spell Rank Data...");
     sSpellMgr->LoadSpellRanks();
 
@@ -1729,10 +1733,7 @@ void World::SetInitialWorldSettings()
     sOutdoorPvPMgr->InitOutdoorPvP();
 
     sLog->outString("Loading Transports...");
-    sMapMgr->LoadTransports();
-
-    sLog->outString("Loading Transport NPCs...");
-    sMapMgr->LoadTransportNPCs();
+    sTransportMgr->SpawnContinentTransports();
 
     ///- Initialize Warden
     sLog->outString("Loading Warden Checks..." );

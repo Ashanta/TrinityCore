@@ -782,10 +782,6 @@ void WorldSession::ReadMovementInfo(WorldPacket &data, MovementInfo* mi)
 
         if (mi->HasExtraMovementFlag(MOVEMENTFLAG2_INTERPOLATED_MOVEMENT))
             data >> mi->t_time2;
-
-        //if (mi->pos.m_positionX != mi->t_pos.m_positionX)
-        //    if (GetPlayer()->GetTransport())
-        //        GetPlayer()->GetTransport()->UpdatePosition(mi);
     }
 
     if (mi->HasMovementFlag(MovementFlags(MOVEMENTFLAG_SWIMMING | MOVEMENTFLAG_FLYING)) || (mi->HasExtraMovementFlag(MOVEMENTFLAG2_ALWAYS_ALLOW_PITCHING)))

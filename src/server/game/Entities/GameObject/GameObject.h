@@ -236,6 +236,7 @@ struct GameObjectTemplate
             uint32 transportPhysics;                        //5
             uint32 mapID;                                   //6
             uint32 worldState1;                             //7
+            uint32 inInstance;                              //8
         } moTransport;
         //16 GAMEOBJECT_TYPE_DUELFLAG - empty
         //17 GAMEOBJECT_TYPE_FISHINGNODE - empty
@@ -833,7 +834,7 @@ class GameObject : public WorldObject, public GridObject<GameObject>, public Map
         void SetDisplayId(uint32 displayid);
 
         GameObjectModel * m_model;
-        void GetRespawnPosition(float &x, float &y, float &z, float* ori) const;
+        void GetRespawnPosition(float &x, float &y, float &z, float* ori = NULL) const;
 
         Transport* ToTransport() { if (GetGOInfo()->type == GAMEOBJECT_TYPE_MO_TRANSPORT) return reinterpret_cast<Transport*>(this); else return NULL; }
         Transport const* ToTransport() const { if (GetGOInfo()->type == GAMEOBJECT_TYPE_MO_TRANSPORT) return reinterpret_cast<Transport const*>(this); else return NULL; }
