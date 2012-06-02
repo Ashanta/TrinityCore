@@ -295,13 +295,35 @@ void WorldSession::HandleMovementOpcodes(WorldPacket & recvData)
         }
 
         // if we boarded a transport, add us to it
-        if (plrMover && !plrMover->GetTransport())
+        if (plrMover)
         {
             // elevators also cause the client to send MOVEMENTFLAG_ONTRANSPORT - just dismount if the guid can be found in the transport list
-            if (Transport* transport = plrMover->GetMap()->GetTransport(movementInfo.t_guid))
+            if (!plrMover->GetTransport())
             {
-                plrMover->m_transport = transport;
-                transport->AddPassenger(plrMover);
+                if (Transport* transport = plrMover->GetMap()->GetTransport(movementInfo.t_guid))
+                {
+                    plrMover->m_transport = transport;
+                    transport->AddPassenger(plrMover);
+                }
+            }
+            else if (plrMover->GetTransport()->GetGUID() != movementInfo.t_guid)
+            {
+                bool foundNewTransport = false;
+                plrMover->m_transport->RemovePassenger(plrMover);
+                if (Transport* transport = plrMover->GetMap()->GetTransport(movementInfo.t_guid))
+                {
+                    foundNewTransport = true;
+                    plrMover->m_transport = transport;
+                    transport->AddPassenger(plrMover);
+                }
+
+                if (!foundNewTransport)
+                {
+                    plrMover->m_transport = NULL;
+                    movementInfo.t_pos.Relocate(0.0f, 0.0f, 0.0f, 0.0f);
+                    movementInfo.t_time = 0;
+                    movementInfo.t_seat = -1;
+                }
             }
         }
 
