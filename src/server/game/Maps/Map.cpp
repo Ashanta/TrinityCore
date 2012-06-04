@@ -473,13 +473,13 @@ void Map::InitializeObject(T* /*obj*/)
 template<>
 void Map::InitializeObject(Creature* obj)
 {
-    obj->_moveState = CREATURE_CELL_MOVE_NONE;
+    obj->_moveState = MAP_OBJECT_CELL_MOVE_NONE;
 }
 
 template<>
 void Map::InitializeObject(GameObject* obj)
 {
-    obj->_moveState = GO_CELL_MOVE_NONE;
+    obj->_moveState = MAP_OBJECT_CELL_MOVE_NONE;
 }
 
 template<class T>
@@ -863,7 +863,7 @@ void Map::AddCreatureToMoveList(Creature* c, float x, float y, float z, float an
     if (_creatureToMoveLock) //can this happen?
         return;
 
-    if (c->_moveState == CREATURE_CELL_MOVE_NONE)
+    if (c->_moveState == MAP_OBJECT_CELL_MOVE_NONE)
         _creaturesToMove.push_back(c);
     c->SetNewCellPosition(x, y, z, ang);
 }
@@ -873,8 +873,8 @@ void Map::RemoveCreatureFromMoveList(Creature* c)
     if (_creatureToMoveLock) //can this happen?
         return;
 
-    if (c->_moveState == CREATURE_CELL_MOVE_ACTIVE)
-        c->_moveState = CREATURE_CELL_MOVE_INACTIVE;
+    if (c->_moveState == MAP_OBJECT_CELL_MOVE_ACTIVE)
+        c->_moveState = MAP_OBJECT_CELL_MOVE_INACTIVE;
 }
 
 void Map::AddGameObjectToMoveList(GameObject* go, float x, float y, float z, float ang)
@@ -882,7 +882,7 @@ void Map::AddGameObjectToMoveList(GameObject* go, float x, float y, float z, flo
     if (_gameObjectsToMoveLock) //can this happen?
         return;
 
-    if (go->_moveState == GO_CELL_MOVE_NONE)
+    if (go->_moveState == MAP_OBJECT_CELL_MOVE_NONE)
         _gameObjectsToMove.push_back(go);
     go->SetNewCellPosition(x, y, z, ang);
 }
@@ -892,8 +892,8 @@ void Map::RemoveGameObjectFromMoveList(GameObject* go)
     if (_gameObjectsToMoveLock) //can this happen?
         return;
 
-    if (go->_moveState == GO_CELL_MOVE_ACTIVE)
-        go->_moveState = GO_CELL_MOVE_INACTIVE;
+    if (go->_moveState == MAP_OBJECT_CELL_MOVE_ACTIVE)
+        go->_moveState = MAP_OBJECT_CELL_MOVE_INACTIVE;
 }
 
 void Map::MoveAllCreaturesInMoveList()
@@ -905,13 +905,13 @@ void Map::MoveAllCreaturesInMoveList()
         if (c->FindMap() != this) //pet is teleported to another map
             continue;
 
-        if (c->_moveState != CREATURE_CELL_MOVE_ACTIVE)
+        if (c->_moveState != MAP_OBJECT_CELL_MOVE_ACTIVE)
         {
-            c->_moveState = CREATURE_CELL_MOVE_NONE;
+            c->_moveState = MAP_OBJECT_CELL_MOVE_NONE;
             continue;
         }
 
-        c->_moveState = CREATURE_CELL_MOVE_NONE;
+        c->_moveState = MAP_OBJECT_CELL_MOVE_NONE;
         if (!c->IsInWorld())
             continue;
 
@@ -959,13 +959,13 @@ void Map::MoveAllGameObjectsInMoveList()
         if (go->FindMap() != this) //pet is teleported to another map
             continue;
 
-        if (go->_moveState != GO_CELL_MOVE_ACTIVE)
+        if (go->_moveState != MAP_OBJECT_CELL_MOVE_ACTIVE)
         {
-            go->_moveState = GO_CELL_MOVE_NONE;
+            go->_moveState = MAP_OBJECT_CELL_MOVE_NONE;
             continue;
         }
 
-        go->_moveState = GO_CELL_MOVE_NONE;
+        go->_moveState = MAP_OBJECT_CELL_MOVE_NONE;
         if (!go->IsInWorld())
             continue;
 

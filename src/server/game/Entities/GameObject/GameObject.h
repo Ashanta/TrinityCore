@@ -615,36 +615,7 @@ class GameObjectModel;
 // 5 sec for bobber catch
 #define FISHING_BOBBER_READY_TIME 5
 
-enum GameObjectCellMoveState
-{
-    GO_CELL_MOVE_NONE, //not in move list
-    GO_CELL_MOVE_ACTIVE, //in move list
-    GO_CELL_MOVE_INACTIVE, //in move list but should not move
-};
-
-class MapGameObject
-{
-    friend class Map; //map for moving creatures
-    friend class ObjectGridLoader; //grid loader for loading creatures
-
-protected:
-    MapGameObject() : _moveState(GO_CELL_MOVE_NONE) {}
-
-private:
-    Cell _currentCell;
-    Cell const& GetCurrentCell() const { return _currentCell; }
-    void SetCurrentCell(Cell const& cell) { _currentCell = cell; }
-
-    GameObjectCellMoveState _moveState;
-    Position _newPosition;
-    void SetNewCellPosition(float x, float y, float z, float o)
-    {
-        _moveState = GO_CELL_MOVE_ACTIVE;
-        _newPosition.Relocate(x, y, z, o);
-    }
-};
-
-class GameObject : public WorldObject, public GridObject<GameObject>, public MapGameObject
+class GameObject : public WorldObject, public GridObject<GameObject>, public MapObject
 {
     public:
         explicit GameObject();
