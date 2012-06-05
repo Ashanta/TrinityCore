@@ -1202,7 +1202,7 @@ void MovementInfo::OutDebug()
 }
 
 WorldObject::WorldObject(bool isWorldObject): WorldLocation(),
-m_name(""), m_isActive(false), m_isWorldObject(isWorldObject), m_zoneScript(NULL),
+m_name(""), m_isActive(false), m_isWorldObject(isWorldObject), m_isUpdating(false), m_zoneScript(NULL),
 m_transport(NULL), m_currMap(NULL), m_InstanceId(0),
 m_phaseMask(PHASEMASK_NORMAL), m_notifyflags(0), m_executed_notifies(0)
 {
@@ -1248,6 +1248,8 @@ void WorldObject::setActive(bool on)
 
     if (on)
     {
+        SetAlwaysUpdating(false);
+
         if (GetTypeId() == TYPEID_UNIT)
             map->AddToActive(this->ToCreature());
         else if (GetTypeId() == TYPEID_DYNAMICOBJECT)
@@ -1264,6 +1266,32 @@ void WorldObject::setActive(bool on)
         else if (ToGameObject() && ToGameObject()->ToTransport())
             map->RemoveFromActive(ToGameObject()->ToTransport());
     }
+}
+
+void WorldObject::SetAlwaysUpdating(bool on)
+{
+    if (m_isUpdating == on)
+        return;
+
+    if (GetTypeId() == TYPEID_PLAYER)
+        return;
+
+    m_isUpdating = on;
+
+    if (!IsInWorld())
+        return;
+
+    Map* map = FindMap();
+    if (!map)
+        return;
+
+    if (on)
+    {
+        setActive(false);
+        map->AddToUpdating(this);
+    }
+    else
+        map->RemoveFromUpdating(this);
 }
 
 void WorldObject::CleanupsBeforeDelete(bool /*finalCleanup*/)

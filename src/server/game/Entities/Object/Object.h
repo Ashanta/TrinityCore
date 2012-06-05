@@ -841,6 +841,8 @@ class WorldObject : public Object, public WorldLocation
         void SetWorldObject(bool apply);
         bool IsPermanentWorldObject() const { return m_isWorldObject; }
         bool IsWorldObject() const;
+        bool IsAlwaysUpdating() const { return m_isUpdating; }
+        void SetAlwaysUpdating(bool on);
 
         template<class NOTIFIER> void VisitNearbyObject(float const& radius, NOTIFIER& notifier) const { if (IsInWorld()) GetMap()->VisitAll(GetPositionX(), GetPositionY(), radius, notifier); }
         template<class NOTIFIER> void VisitNearbyGridObject(float const& radius, NOTIFIER& notifier) const { if (IsInWorld()) GetMap()->VisitGrid(GetPositionX(), GetPositionY(), radius, notifier); }
@@ -868,10 +870,12 @@ class WorldObject : public Object, public WorldLocation
         void SetTransport(Transport* t) { m_transport = t; }
 
         MovementInfo m_movementInfo;
+
     protected:
         std::string m_name;
         bool m_isActive;
         const bool m_isWorldObject;
+        bool m_isUpdating;
         ZoneScript* m_zoneScript;
 
         // transports
@@ -897,7 +901,6 @@ class WorldObject : public Object, public WorldLocation
 
         uint16 m_notifyflags;
         uint16 m_executed_notifies;
-
         virtual bool _IsWithinDist(WorldObject const* obj, float dist2compare, bool is3D) const;
 
         bool CanNeverSee(WorldObject const* obj) const { return GetMap() != obj->GetMap() || !InSamePhase(obj); }

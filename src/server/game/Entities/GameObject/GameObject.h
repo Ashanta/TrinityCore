@@ -618,7 +618,7 @@ class GameObjectModel;
 class GameObject : public WorldObject, public GridObject<GameObject>, public MapObject
 {
     public:
-        explicit GameObject();
+        explicit GameObject(bool isWorldObject = false);
         ~GameObject();
 
         void AddToWorld();

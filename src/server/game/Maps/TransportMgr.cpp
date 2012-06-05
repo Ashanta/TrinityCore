@@ -363,7 +363,7 @@ Transport* TransportMgr::CreateTransport(uint32 entry, Map* map /*= NULL*/)
         }
     }
 
-    trans->setActive(true);
+    trans->SetAlwaysUpdating(true);
     trans->GetMap()->AddToMap<GameObject>(trans);
     return trans;
 }

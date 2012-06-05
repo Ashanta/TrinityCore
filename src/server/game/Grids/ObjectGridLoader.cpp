@@ -102,6 +102,8 @@ void AddObjectHelper(CellCoord &cell, GridRefManager<T> &m, uint32 &count, Map* 
     obj->AddToWorld();
     if (obj->isActiveObject())
         map->AddToActive(obj);
+    else if (obj->IsAlwaysUpdating())
+        map->AddToUpdating(obj);
 
     ++count;
 }

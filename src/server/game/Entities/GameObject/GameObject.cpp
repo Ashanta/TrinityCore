@@ -33,7 +33,7 @@
 #include "GameObjectModel.h"
 #include "DynamicTree.h"
 
-GameObject::GameObject() : WorldObject(false), MapObject(),
+GameObject::GameObject(bool isWorldObject /*= false*/) : WorldObject(isWorldObject), MapObject(),
     m_model(NULL), m_goValue(new GameObjectValue()), m_AI(NULL)
 {
     m_objectType |= TYPEMASK_GAMEOBJECT;

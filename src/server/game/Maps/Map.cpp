@@ -209,7 +209,8 @@ _creatureToMoveLock(false), _gameObjectsToMoveLock(false),
 i_mapEntry(sMapStore.LookupEntry(id)), i_spawnMode(SpawnMode), i_InstanceId(InstanceId),
 m_unloadTimer(0), m_VisibleDistance(DEFAULT_VISIBILITY_DISTANCE),
 m_VisibilityNotifyPeriod(DEFAULT_VISIBILITY_NOTIFY_PERIOD),
-m_activeNonPlayersIter(m_activeNonPlayers.end()), i_gridExpiry(expiry),
+m_activeNonPlayersIter(m_activeNonPlayers.end()), _updatingObjectsIter(_updatingObjects.end()),
+i_gridExpiry(expiry),
 i_scriptLock(false)
 {
     m_parentMap = (_parent ? _parent : this);
@@ -520,6 +521,8 @@ bool Map::AddToMap(T *obj)
 
     if (obj->isActiveObject())
         AddToActive(obj);
+    else if (obj->IsAlwaysUpdating())
+        AddToUpdating(obj);
 
     //something, such as vehicle, needs to be update immediately
     //also, trigger needs to cast spell, if not update, cannot see visual
@@ -610,6 +613,21 @@ void Map::Update(const uint32 t_diff)
             continue;
 
         VisitNearbyCellsOf(obj, grid_object_update, world_object_update);
+    }
+
+    for (_updatingObjectsIter = _updatingObjects.begin(); _updatingObjectsIter != _updatingObjects.end();)
+    {
+        WorldObject* obj = *_updatingObjectsIter;
+        ++_updatingObjectsIter;
+
+        if (!obj || !obj->IsInWorld())
+            continue;
+
+        CellCoord p = Trinity::ComputeCellCoord(obj->GetPositionX(), obj->GetPositionY());
+        if (isCellMarked(p.y_coord * TOTAL_NUMBER_OF_CELLS_PER_MAP + p.x_coord))
+            continue;
+
+        obj->Update(t_diff);
     }
 
     ///- Process necessary scripts
@@ -742,6 +760,8 @@ void Map::RemoveFromMap(T *obj, bool remove)
     obj->RemoveFromWorld();
     if (obj->isActiveObject())
         RemoveFromActive(obj);
+    else if (obj->IsAlwaysUpdating())
+        RemoveFromUpdating(obj);
 
     obj->UpdateObjectVisibility(true);
     obj->RemoveFromGrid();
@@ -844,7 +864,7 @@ void Map::GameObjectRelocation(GameObject* go, float x, float y, float z, float 
         sLog->outDebug(LOG_FILTER_MAPS, "GameObject (GUID: %u Entry: %u) added to moving list from grid[%u, %u]cell[%u, %u] to grid[%u, %u]cell[%u, %u].", go->GetGUIDLow(), go->GetEntry(), old_cell.GridX(), old_cell.GridY(), old_cell.CellX(), old_cell.CellY(), new_cell.GridX(), new_cell.GridY(), new_cell.CellX(), new_cell.CellY());
 #endif
         AddGameObjectToMoveList(go, x, y, z, orientation);
-        // in diffcell/diffgrid case notifiers called at finishing move creature in Map::MoveAllCreaturesInMoveList
+        // in diffcell/diffgrid case notifiers called at finishing move go in Map::MoveAllGameObjectsInMoveList
     }
     else
     {
@@ -956,7 +976,7 @@ void Map::MoveAllGameObjectsInMoveList()
     for (std::vector<GameObject*>::iterator itr = _gameObjectsToMove.begin(); itr != _gameObjectsToMove.end(); ++itr)
     {
         GameObject* go = *itr;
-        if (go->FindMap() != this) //pet is teleported to another map
+        if (go->FindMap() != this) //transport is teleported to another map
             continue;
 
         if (go->_moveState != MAP_OBJECT_CELL_MOVE_ACTIVE)
@@ -974,13 +994,12 @@ void Map::MoveAllGameObjectsInMoveList()
         {
             // update pos
             go->Relocate(go->_newPosition);
-            //CreatureRelocationNotify(c, new_cell, new_cell.cellCoord());
             go->UpdateObjectVisibility(false);
         }
         else
         {
-            // if creature can't be move in new cell/grid (not loaded) move it to repawn cell/grid
-            // creature coordinates will be updated and notifiers send
+            // if GameObject can't be move in new cell/grid (not loaded) move it to repawn cell/grid
+            // GameObject coordinates will be updated and notifiers send
             if (!GameObjectRespawnRelocation(go, false))
             {
                 // ... or unload (if respawn grid also not loaded)
@@ -1036,7 +1055,7 @@ bool Map::CreatureCellRelocation(Creature* c, Cell new_cell)
     }
 
     // in diff. loaded grid normal creature
-    if (IsGridLoaded(GridCoord(new_cell.GridX(), new_cell.GridY())))
+    if (c->IsAlwaysUpdating() || IsGridLoaded(GridCoord(new_cell.GridX(), new_cell.GridY())))
     {
         #ifdef TRINITY_DEBUG
             sLog->outDebug(LOG_FILTER_MAPS, "Creature (GUID: %u Entry: %u) moved from grid[%u, %u]cell[%u, %u] to grid[%u, %u]cell[%u, %u].", c->GetGUIDLow(), c->GetEntry(), old_cell.GridX(), old_cell.GridY(), old_cell.CellX(), old_cell.CellY(), new_cell.GridX(), new_cell.GridY(), new_cell.CellX(), new_cell.CellY());
@@ -1081,7 +1100,7 @@ bool Map::GameObjectCellRelocation(GameObject* go, Cell new_cell)
         return true;
     }
 
-    // in diff. grids but active creature
+    // in diff. grids but active GameObject
     if (go->isActiveObject())
     {
         EnsureGridLoadedForActiveObject(new_cell, go);
@@ -1096,8 +1115,8 @@ bool Map::GameObjectCellRelocation(GameObject* go, Cell new_cell)
         return true;
     }
 
-    // in diff. loaded grid normal creature
-    if (IsGridLoaded(GridCoord(new_cell.GridX(), new_cell.GridY())))
+    // in diff. loaded grid normal GameObject
+    if (go->IsAlwaysUpdating() || IsGridLoaded(GridCoord(new_cell.GridX(), new_cell.GridY())))
     {
         #ifdef TRINITY_DEBUG
             sLog->outDebug(LOG_FILTER_MAPS, "GameObject (GUID: %u Entry: %u) moved from grid[%u, %u]cell[%u, %u] to grid[%u, %u]cell[%u, %u].", go->GetGUIDLow(), go->GetEntry(), old_cell.GridX(), old_cell.GridY(), old_cell.CellX(), old_cell.CellY(), new_cell.GridX(), new_cell.GridY(), new_cell.CellX(), new_cell.CellY());
@@ -1110,7 +1129,7 @@ bool Map::GameObjectCellRelocation(GameObject* go, Cell new_cell)
         return true;
     }
 
-    // fail to move: normal creature attempt move to unloaded grid
+    // fail to move: normal GameObject attempt move to unloaded grid
     #ifdef TRINITY_DEBUG
         sLog->outDebug(LOG_FILTER_MAPS, "GameObject (GUID: %u Entry: %u) attempted to move from grid[%u, %u]cell[%u, %u] to unloaded grid[%u, %u]cell[%u, %u].", go->GetGUIDLow(), go->GetEntry(), old_cell.GridX(), old_cell.GridY(), old_cell.CellX(), old_cell.CellY(), new_cell.GridX(), new_cell.GridY(), new_cell.CellX(), new_cell.CellY());
     #endif
@@ -3047,4 +3066,17 @@ void Map::UpdateIteratorBack(Player* player)
 {
     if (m_mapRefIter == player->GetMapRef())
         m_mapRefIter = m_mapRefIter->nocheck_prev();
+}
+
+void Map::AddToUpdating(WorldObject* obj)
+{
+    ASSERT(!obj->isActiveObject() && "Object cannot be always updating and active at the same time.");
+    _updatingObjects.insert(obj);
+}
+
+template<class T>
+void Map::AddToActiveHelper(T* obj)
+{
+    ASSERT(!obj->IsAlwaysUpdating() && "Object cannot be always updating and active at the same time.");
+    m_activeNonPlayers.insert(obj);
 }
