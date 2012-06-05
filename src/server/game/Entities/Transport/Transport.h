@@ -66,6 +66,7 @@ class Transport : public GameObject
         KeyFrameVec::const_iterator _currentFrame;
         KeyFrameVec::const_iterator _nextFrame;
         uint32 _moveTimer;
+        TimeTrackerSmall _positionChangeTimer;
         bool _isMoving;
 
         std::set<WorldObject*> _passengers;

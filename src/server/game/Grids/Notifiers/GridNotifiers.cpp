@@ -330,10 +330,8 @@ template<class T>
 void ObjectUpdater::Visit(GridRefManager<T> &m)
 {
     for (typename GridRefManager<T>::iterator iter = m.begin(); iter != m.end(); ++iter)
-    {
         if (iter->getSource()->IsInWorld())
             iter->getSource()->Update(i_timeDiff);
-    }
 }
 
 bool AnyDeadUnitObjectInRangeCheck::operator()(Player* u)
@@ -366,5 +364,6 @@ bool AnyDeadUnitSpellTargetInRangeCheck::operator()(Creature* u)
     return AnyDeadUnitObjectInRangeCheck::operator()(u) && i_check(u);
 }
 
-template void ObjectUpdater::Visit<GameObject>(GameObjectMapType &);
-template void ObjectUpdater::Visit<DynamicObject>(DynamicObjectMapType &);
+template void ObjectUpdater::Visit<Creature>(CreatureMapType&);
+template void ObjectUpdater::Visit<GameObject>(GameObjectMapType&);
+template void ObjectUpdater::Visit<DynamicObject>(DynamicObjectMapType&);

@@ -28,7 +28,7 @@
 #include "GameObjectAI.h"
 #include "Vehicle.h"
 
-Transport::Transport() : GameObject()
+Transport::Transport() : GameObject(true), _moveTimer(0)
 {
     m_updateFlag = (UPDATEFLAG_TRANSPORT | UPDATEFLAG_LOWGUID | UPDATEFLAG_STATIONARY_POSITION | UPDATEFLAG_ROTATION);
 }
@@ -93,6 +93,11 @@ bool Transport::Create(uint32 guidlow, uint32 entry, uint32 mapid, float x, floa
 
 void Transport::Update(uint32 diff)
 {
+    enum
+    {
+        POSITION_UPDATE_DELAY = 400,
+    };
+
     if (!AI())
     {
         if (!AIM_Initialize())
@@ -106,6 +111,8 @@ void Transport::Update(uint32 diff)
 
     _moveTimer += diff;
     uint32 timer = _moveTimer % GetPeriod();
+
+    // Set current waypoint
     while (timer > _nextFrame->PathTime || timer < _currentFrame->DepartureTime)
     {
         // arrived at next stop point
@@ -137,13 +144,20 @@ void Transport::Update(uint32 diff)
         sLog->outDebug(LOG_FILTER_TRANSPORTS, "%s moved to %f %f %f %d", GetName(), GetPositionX(), GetPositionY(), GetPositionZ(), _currentFrame->Node->mapid);
     }
 
-    if (IsMoving())
+    // Set position
+    _positionChangeTimer.Update(diff);
+    if (_positionChangeTimer.Passed())
     {
-        float t = CalculateSegmentPos((float)timer/(float)IN_MILLISECONDS);
-        G3D::Vector3 pos;
-        _currentFrame->Spline->evaluate_percent(_currentFrame->Index, t, pos);
-        GetMap()->GameObjectRelocation(this, pos.x, pos.y, pos.z, GetAngle(pos.x, pos.y) + float(M_PI));
-        UpdatePassengerPositions();
+        _positionChangeTimer.Reset(POSITION_UPDATE_DELAY);
+        if (IsMoving())
+        {
+            float t = CalculateSegmentPos((float)timer/(float)IN_MILLISECONDS);
+            G3D::Vector3 pos, dir;
+            _currentFrame->Spline->evaluate_percent(_currentFrame->Index, t, pos);
+            _currentFrame->Spline->evaluate_derivative(_currentFrame->Index, t, dir);
+            GetMap()->GameObjectRelocation(this, pos.x, pos.y, pos.z, atan2(dir.x, dir.y));
+            UpdatePassengerPositions();
+        }
     }
 
     sScriptMgr->OnTransportUpdate(this, diff);
@@ -266,18 +280,13 @@ void Transport::MoveToNextWayPoint()
 
 float Transport::CalculateSegmentPos(float now)
 {
+    KeyFrame const& frame = *_currentFrame;
+    //return (GetTimer() % GetPeriod() - frame.DepartureTime) / (frame.TimeTo * IN_MILLISECONDS);
+
     const float speed = float(m_goInfo->moTransport.moveSpeed);
     const float accel = float(m_goInfo->moTransport.accelRate);
-    KeyFrame const& frame = *_currentFrame;
     float timeSinceStop = frame.TimeFrom + (now - (1.0f/IN_MILLISECONDS) * frame.DepartureTime);
     float timeUntilStop = frame.TimeTo - (now - (1.0f/IN_MILLISECONDS) * frame.DepartureTime);
-    // timeSinceStop includes the waiting time, so check if we move already
-    /* if (frame.IsStopFrame())
-    {
-    if (timeSinceStop < frame.node->delay)
-    return 0.0f;
-    timeSinceStop -= frame.node->delay;
-    } */
     float segmentPos, dist;
     float accelTime = _transportInfo->accelTime;
     float accelDist = _transportInfo->accelDist;
@@ -305,18 +314,21 @@ float Transport::CalculateSegmentPos(float now)
 void Transport::TeleportTransport(uint32 newMapid, float x, float y, float z)
 {
     Map const* oldMap = GetMap();
-    Relocate(x, y, z);
 
     // TODO: Teleport players, move current map's non-player passengers out of passenger lists and put new map's passengers on transport
     // On retail, non-player passengers are not moved across maps
 
     //we need to create and save new Map object with 'newMapid' because if not done -> lead to invalid Map object reference...
     //player far teleport would try to create same instance, but we need it NOW for transport...
-    Map* newMap = sMapMgr->CreateBaseMap(newMapid);
-    GetMap()->RemoveFromMap<GameObject>(this, false);
-    SetMap(newMap);
-    GetMap()->AddToMap<GameObject>(this);
+    if (oldMap->GetId() != newMapid)
+    {
+        Map* newMap = sMapMgr->CreateBaseMap(newMapid);
+        GetMap()->RemoveFromMap<GameObject>(this, false);
+        SetMap(newMap);
+        GetMap()->AddToMap<GameObject>(this);
+    }
 
+    GetMap()->GameObjectRelocation(this, x, y, z, GetOrientation());
     MoveToNextWayPoint();
 }
 
