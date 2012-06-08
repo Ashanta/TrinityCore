@@ -1204,6 +1204,10 @@ bool Map::UnloadGrid(NGridType& ngrid, bool unloadAll)
             if (ngrid.GetWorldObjectCountInNGrid<Creature>())
                 return false;
 
+            // transports
+            if (ngrid.GetWorldObjectCountInNGrid<GameObject>())
+                return false;
+
             if (ActiveObjectsNearGrid(ngrid))
                 return false;
         }
