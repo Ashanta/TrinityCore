@@ -347,8 +347,6 @@ void Transport::TeleportTransport(uint32 newMapid, float x, float y, float z)
 {
     Map const* oldMap = GetMap();
 
-    // we need to create and save new Map object with 'newMapid' because if not done -> lead to invalid Map object reference...
-    // player far teleport would try to create same instance, but we need it NOW for transport...
     if (oldMap->GetId() != newMapid)
     {
         Map* newMap = sMapMgr->CreateBaseMap(newMapid);
@@ -383,7 +381,58 @@ void Transport::TeleportTransport(uint32 newMapid, float x, float y, float z)
             }
         }
 
+        // Teleport passengers after everyone on destination map are sent create packet
+        // but before transport itself is registered there and begins updating
+        for (std::set<WorldObject*>::iterator itr = _staticPassengers.begin(); itr != _staticPassengers.end(); ++itr)
+        {
+            switch ((*itr)->GetTypeId())
+            {
+                case TYPEID_UNIT:
+                    (*itr)->ToCreature()->FarTeleportTo(newMap, x, y, z, (*itr)->GetOrientation());
+                    break;
+                case TYPEID_GAMEOBJECT:
+                {
+                    GameObject* go = (*itr)->ToGameObject();
+                    go->GetMap()->RemoveFromMap(go, false);
+                    Relocate(x, y, z, go->GetOrientation());
+                    SetMap(newMap);
+                    newMap->AddToMap(go);
+                    break;
+                }
+            }
+        }
+
+        for (std::set<WorldObject*>::iterator itr = _passengers.begin(); itr != _passengers.end(); ++itr)
+        {
+            switch ((*itr)->GetTypeId())
+            {
+                case TYPEID_UNIT:
+                    if (!IS_PLAYER_GUID((*itr)->ToUnit()->GetOwnerGUID()))  // pets should be teleported with player
+                        (*itr)->ToCreature()->FarTeleportTo(newMap, x, y, z, (*itr)->GetOrientation());
+                    break;
+                case TYPEID_GAMEOBJECT:
+                {
+                    GameObject* go = (*itr)->ToGameObject();
+                    go->GetMap()->RemoveFromMap(go, false);
+                    Relocate(x, y, z, go->GetOrientation());
+                    SetMap(newMap);
+                    newMap->AddToMap(go);
+                    break;
+                }
+                case TYPEID_PLAYER:
+                    (*itr)->ToPlayer()->TeleportTo(newMapid, x, y, z, (*itr)->GetOrientation(), TELE_TO_NOT_LEAVE_TRANSPORT);
+                    break;
+            }
+        }
+
         GetMap()->AddToMap<Transport>(this);
+    }
+    else
+    {
+        // Teleport players, they need to know it
+        for (std::set<WorldObject*>::iterator itr = _passengers.begin(); itr != _passengers.end(); ++itr)
+            if ((*itr)->GetTypeId() == TYPEID_PLAYER)
+                (*itr)->ToUnit()->NearTeleportTo(x, y, z, GetOrientation());
     }
 
     UpdatePosition(x, y, z, GetOrientation());
@@ -405,6 +454,8 @@ void Transport::UpdatePassengerPositions(std::set<WorldObject*>& passengers)
             if (unit->GetVehicle())
                 continue;
 
+        // Do not use Unit::UpdatePosition here, we don't want to remove auras
+        // as if regular movement occurred
         float x, y, z, o;
         passenger->m_movementInfo.t_pos.GetPosition(x, y, z, o);
         CalculatePassengerPosition(x, y, z, o);
