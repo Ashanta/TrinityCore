@@ -209,7 +209,7 @@ _creatureToMoveLock(false), _gameObjectsToMoveLock(false),
 i_mapEntry(sMapStore.LookupEntry(id)), i_spawnMode(SpawnMode), i_InstanceId(InstanceId),
 m_unloadTimer(0), m_VisibleDistance(DEFAULT_VISIBILITY_DISTANCE),
 m_VisibilityNotifyPeriod(DEFAULT_VISIBILITY_NOTIFY_PERIOD),
-m_activeNonPlayersIter(m_activeNonPlayers.end()), _updatingObjectsIter(_updatingObjects.end()),
+m_activeNonPlayersIter(m_activeNonPlayers.end()), _transportsUpdateIter(_transports.end()),
 i_gridExpiry(expiry),
 i_scriptLock(false)
 {
@@ -264,10 +264,7 @@ template<>
 void Map::AddToGrid(GameObject* obj, Cell const& cell)
 {
     NGridType* grid = getNGrid(cell.GridX(), cell.GridY());
-    if (obj->IsWorldObject())
-        grid->GetGridType(cell.CellX(), cell.CellY()).AddWorldObject(obj);
-    else
-        grid->GetGridType(cell.CellX(), cell.CellY()).AddGridObject(obj);
+    grid->GetGridType(cell.CellX(), cell.CellY()).AddGridObject(obj);
 
     obj->SetCurrentCell(cell);
 }
@@ -458,6 +455,7 @@ bool Map::AddPlayerToMap(Player* player)
     player->AddToWorld();
 
     SendInitSelf(player);
+    SendInitTransports(player);
 
     player->m_clientGUIDs.clear();
     player->UpdateObjectVisibility(false);
@@ -521,12 +519,38 @@ bool Map::AddToMap(T *obj)
 
     if (obj->isActiveObject())
         AddToActive(obj);
-    else if (obj->IsAlwaysUpdating())
-        AddToUpdating(obj);
 
     //something, such as vehicle, needs to be update immediately
     //also, trigger needs to cast spell, if not update, cannot see visual
     obj->UpdateObjectVisibility(true);
+    return true;
+}
+
+template<>
+bool Map::AddToMap(Transport *obj)
+{
+    //TODO: Needs clean up. An object should not be added to map twice.
+    if (obj->IsInWorld())
+        return true;
+
+    CellCoord cellCoord = Trinity::ComputeCellCoord(obj->GetPositionX(), obj->GetPositionY());
+    //It will create many problems (including crashes) if an object is not added to grid after creation
+    //The correct way to fix it is to make AddToMap return false and delete the object if it is not added to grid
+    //But now AddToMap is used in too many places, I will just see how many ASSERT failures it will cause
+    ASSERT(cellCoord.IsCoordValid());
+    if (!cellCoord.IsCoordValid())
+    {
+        sLog->outError("Map::Add: Object " UI64FMTD " has invalid coordinates X:%f Y:%f grid cell [%u:%u]", obj->GetGUID(), obj->GetPositionX(), obj->GetPositionY(), cellCoord.x_coord, cellCoord.y_coord);
+        return false; //Should delete object
+    }
+
+    Cell cell(cellCoord);
+    sLog->outStaticDebug("Object %u enters grid[%u, %u]", GUID_LOPART(obj->GetGUID()), cell.GridX(), cell.GridY());
+
+    obj->AddToWorld();
+
+    _transports.insert(obj);
+
     return true;
 }
 
@@ -615,16 +639,12 @@ void Map::Update(const uint32 t_diff)
         VisitNearbyCellsOf(obj, grid_object_update, world_object_update);
     }
 
-    for (_updatingObjectsIter = _updatingObjects.begin(); _updatingObjectsIter != _updatingObjects.end();)
+    for (_transportsUpdateIter = _transports.begin(); _transportsUpdateIter != _transports.end();)
     {
-        WorldObject* obj = *_updatingObjectsIter;
-        ++_updatingObjectsIter;
+        WorldObject* obj = *_transportsUpdateIter;
+        ++_transportsUpdateIter;
 
-        if (!obj || !obj->IsInWorld())
-            continue;
-
-        CellCoord p = Trinity::ComputeCellCoord(obj->GetPositionX(), obj->GetPositionY());
-        if (isCellMarked(p.y_coord * TOTAL_NUMBER_OF_CELLS_PER_MAP + p.x_coord))
+        if (!obj->IsInWorld())
             continue;
 
         obj->Update(t_diff);
@@ -739,6 +759,7 @@ void Map::ProcessRelocationNotifies(const uint32 diff)
 void Map::RemovePlayerFromMap(Player* player, bool remove)
 {
     player->RemoveFromWorld();
+    SendRemoveTransports(player);
 
     player->UpdateObjectVisibility(true);
     if (player->IsInGrid())
@@ -760,11 +781,37 @@ void Map::RemoveFromMap(T *obj, bool remove)
     obj->RemoveFromWorld();
     if (obj->isActiveObject())
         RemoveFromActive(obj);
-    else if (obj->IsAlwaysUpdating())
-        RemoveFromUpdating(obj);
 
     obj->UpdateObjectVisibility(true);
     obj->RemoveFromGrid();
+
+    obj->ResetMap();
+
+    if (remove)
+    {
+        // if option set then object already saved at this moment
+        if (!sWorld->getBoolConfig(CONFIG_SAVE_RESPAWN_TIME_IMMEDIATELY))
+            obj->SaveRespawnTime();
+        DeleteFromWorld(obj);
+    }
+}
+
+template<>
+void Map::RemoveFromMap(Transport* obj, bool remove)
+{
+    obj->RemoveFromWorld();
+
+    if (_transportsUpdateIter != _transports.end())
+    {
+        TransportsContainer::iterator itr = _transports.find(obj);
+        if (itr == _transports.end())
+            return;
+        if (itr == _transportsUpdateIter)
+            ++_transportsUpdateIter;
+        _transports.erase(itr);
+    }
+    else
+        _transports.erase(obj);
 
     obj->ResetMap();
 
@@ -1055,7 +1102,7 @@ bool Map::CreatureCellRelocation(Creature* c, Cell new_cell)
     }
 
     // in diff. loaded grid normal creature
-    if (c->IsAlwaysUpdating() || IsGridLoaded(GridCoord(new_cell.GridX(), new_cell.GridY())))
+    if (IsGridLoaded(GridCoord(new_cell.GridX(), new_cell.GridY())))
     {
         #ifdef TRINITY_DEBUG
             sLog->outDebug(LOG_FILTER_MAPS, "Creature (GUID: %u Entry: %u) moved from grid[%u, %u]cell[%u, %u] to grid[%u, %u]cell[%u, %u].", c->GetGUIDLow(), c->GetEntry(), old_cell.GridX(), old_cell.GridY(), old_cell.CellX(), old_cell.CellY(), new_cell.GridX(), new_cell.GridY(), new_cell.CellX(), new_cell.CellY());
@@ -1116,7 +1163,7 @@ bool Map::GameObjectCellRelocation(GameObject* go, Cell new_cell)
     }
 
     // in diff. loaded grid normal GameObject
-    if (go->IsAlwaysUpdating() || IsGridLoaded(GridCoord(new_cell.GridX(), new_cell.GridY())))
+    if (IsGridLoaded(GridCoord(new_cell.GridX(), new_cell.GridY())))
     {
         #ifdef TRINITY_DEBUG
             sLog->outDebug(LOG_FILTER_MAPS, "GameObject (GUID: %u Entry: %u) moved from grid[%u, %u]cell[%u, %u] to grid[%u, %u]cell[%u, %u].", go->GetGUIDLow(), go->GetEntry(), old_cell.GridX(), old_cell.GridY(), old_cell.CellX(), old_cell.CellY(), new_cell.GridX(), new_cell.GridY(), new_cell.CellX(), new_cell.CellY());
@@ -1202,10 +1249,6 @@ bool Map::UnloadGrid(NGridType& ngrid, bool unloadAll)
         {
             //pets, possessed creatures (must be active), transport passengers
             if (ngrid.GetWorldObjectCountInNGrid<Creature>())
-                return false;
-
-            // transports
-            if (ngrid.GetWorldObjectCountInNGrid<GameObject>())
                 return false;
 
             if (ActiveObjectsNearGrid(ngrid))
@@ -2286,6 +2329,32 @@ void Map::SendInitSelf(Player* player)
     player->GetSession()->SendPacket(&packet);
 }
 
+void Map::SendInitTransports(Player* player)
+{
+    // Hack to send out transports
+    UpdateData transData;
+    for (TransportsContainer::const_iterator i = _transports.begin(); i != _transports.end(); ++i)
+        if (*i != player->GetTransport())
+            (*i)->BuildCreateUpdateBlockForPlayer(&transData, player);
+
+    WorldPacket packet;
+    transData.BuildPacket(&packet);
+    player->GetSession()->SendPacket(&packet);
+}
+
+void Map::SendRemoveTransports(Player* player)
+{
+    // Hack to send out transports
+    UpdateData transData;
+    for (TransportsContainer::const_iterator i = _transports.begin(); i != _transports.end(); ++i)
+        if (*i != player->GetTransport())
+            (*i)->BuildOutOfRangeUpdateBlock(&transData);
+
+    WorldPacket packet;
+    transData.BuildPacket(&packet);
+    player->GetSession()->SendPacket(&packet);
+}
+
 inline void Map::setNGrid(NGridType *grid, uint32 x, uint32 y)
 {
     if (x >= MAX_NUMBER_OF_GRIDS || y >= MAX_NUMBER_OF_GRIDS)
@@ -2471,28 +2540,6 @@ void Map::AddToActive(Creature* c)
     }
 }
 
-template <>
-void Map::AddToActive(Transport* c)
-{
-    AddToActiveHelper(c);
-
-    // also not allow unloading spawn grid to prevent creating creature clone at load
-    if (c->GetDBTableGUIDLow())
-    {
-        float x, y, z;
-        c->GetRespawnPosition(x, y, z);
-        GridCoord p = Trinity::ComputeGridCoord(x, y);
-        if (getNGrid(p.x_coord, p.y_coord))
-            getNGrid(p.x_coord, p.y_coord)->incUnloadActiveLock();
-        else
-        {
-            GridCoord p2 = Trinity::ComputeGridCoord(c->GetPositionX(), c->GetPositionY());
-            sLog->outError("Active Transport (GUID: %u Entry: %u) added to grid[%u, %u] but spawn grid[%u, %u] was not loaded.",
-                c->GetGUIDLow(), c->GetEntry(), p.x_coord, p.y_coord, p2.x_coord, p2.y_coord);
-        }
-    }
-}
-
 template<class T>
 void Map::RemoveFromActive(T* obj)
 {
@@ -2516,28 +2563,6 @@ void Map::RemoveFromActive(Creature* c)
         {
             GridCoord p2 = Trinity::ComputeGridCoord(c->GetPositionX(), c->GetPositionY());
             sLog->outError("Active creature (GUID: %u Entry: %u) removed from grid[%u, %u] but spawn grid[%u, %u] was not loaded.",
-                c->GetGUIDLow(), c->GetEntry(), p.x_coord, p.y_coord, p2.x_coord, p2.y_coord);
-        }
-    }
-}
-
-template <>
-void Map::RemoveFromActive(Transport* c)
-{
-    RemoveFromActiveHelper(c);
-
-    // also allow unloading spawn grid
-    if (c->GetDBTableGUIDLow())
-    {
-        float x, y, z;
-        c->GetRespawnPosition(x, y, z);
-        GridCoord p = Trinity::ComputeGridCoord(x, y);
-        if (getNGrid(p.x_coord, p.y_coord))
-            getNGrid(p.x_coord, p.y_coord)->decUnloadActiveLock();
-        else
-        {
-            GridCoord p2 = Trinity::ComputeGridCoord(c->GetPositionX(), c->GetPositionY());
-            sLog->outError("Active Transport (GUID: %u Entry: %u) removed from grid[%u, %u] but spawn grid[%u, %u] was not loaded.",
                 c->GetGUIDLow(), c->GetEntry(), p.x_coord, p.y_coord, p2.x_coord, p2.y_coord);
         }
     }
@@ -3195,17 +3220,4 @@ time_t Map::GetLinkedRespawnTime(uint64 guid) const
     }
 
     return time_t(0);
-}
-
-void Map::AddToUpdating(WorldObject* obj)
-{
-    ASSERT(!obj->isActiveObject() && "Object cannot be always updating and active at the same time.");
-    _updatingObjects.insert(obj);
-}
-
-template<class T>
-void Map::AddToActiveHelper(T* obj)
-{
-    ASSERT(!obj->IsAlwaysUpdating() && "Object cannot be always updating and active at the same time.");
-    m_activeNonPlayers.insert(obj);
 }

@@ -28,7 +28,8 @@
 #include "GameObjectAI.h"
 #include "Vehicle.h"
 
-Transport::Transport() : GameObject(true), _moveTimer(0)
+Transport::Transport() : GameObject(),
+    _transportInfo(NULL), _moveTimer(0), _isMoving(true)
 {
     m_updateFlag = (UPDATEFLAG_TRANSPORT | UPDATEFLAG_LOWGUID | UPDATEFLAG_STATIONARY_POSITION | UPDATEFLAG_ROTATION);
 }
@@ -155,8 +156,7 @@ void Transport::Update(uint32 diff)
             G3D::Vector3 pos, dir;
             _currentFrame->Spline->evaluate_percent(_currentFrame->Index, t, pos);
             _currentFrame->Spline->evaluate_derivative(_currentFrame->Index, t, dir);
-            GetMap()->GameObjectRelocation(this, pos.x, pos.y, pos.z, atan2(dir.x, dir.y));
-            UpdatePassengerPositions();
+            UpdatePosition(pos.x, pos.y, pos.z, atan2(dir.x, dir.y));
         }
     }
 
@@ -174,7 +174,7 @@ void Transport::AddPassenger(WorldObject* passenger)
 
 void Transport::RemovePassenger(WorldObject* passenger)
 {
-    if (_passengers.erase(passenger))
+    if (_passengers.erase(passenger) || _staticPassengers.erase(passenger)) // static passenger can remove itself in case of grid unload
         sLog->outDetail("Object %s removed from transport %s.", passenger->GetName(), GetName());
 
 
@@ -182,7 +182,7 @@ void Transport::RemovePassenger(WorldObject* passenger)
         sScriptMgr->OnRemovePassenger(this, plr);
 }
 
-Creature* Transport::CreateNPCPassenger(uint32 guid, uint32 entry, float x, float y, float z, float o, CreatureData const* data /*= NULL*/)
+Creature* Transport::CreateNPCPassenger(uint32 guid, CreatureData const* data)
 {
     Map* map = GetMap();
     Creature* creature = new Creature();
@@ -192,6 +192,11 @@ Creature* Transport::CreateNPCPassenger(uint32 guid, uint32 entry, float x, floa
         delete creature;
         return NULL;
     }
+
+    float x = data->posX;
+    float y = data->posY;
+    float z = data->posZ;
+    float o = data->orientation;
 
     creature->SetTransport(this);
     creature->AddUnitMovementFlag(MOVEMENTFLAG_ONTRANSPORT);
@@ -210,13 +215,13 @@ Creature* Transport::CreateNPCPassenger(uint32 guid, uint32 entry, float x, floa
     }
 
     map->AddToMap(creature);
-    AddPassenger(creature);
+    _staticPassengers.insert(creature);
 
     sScriptMgr->OnAddCreaturePassenger(this, creature);
     return creature;
 }
 
-GameObject* Transport::CreateGOPassenger(uint32 guid, uint32 entry, float x, float y, float z, float o, GameObjectData const* data /*= NULL*/)
+GameObject* Transport::CreateGOPassenger(uint32 guid, GameObjectData const* data)
 {
     Map* map = GetMap();
     GameObject* go = new GameObject();
@@ -226,6 +231,11 @@ GameObject* Transport::CreateGOPassenger(uint32 guid, uint32 entry, float x, flo
         delete go;
         return NULL;
     }
+
+    float x = data->posX;
+    float y = data->posY;
+    float z = data->posZ;
+    float o = data->orientation;
 
     go->SetTransport(this);
     go->m_movementInfo.guid = GetGUID();
@@ -241,7 +251,7 @@ GameObject* Transport::CreateGOPassenger(uint32 guid, uint32 entry, float x, flo
     }
 
     map->AddToMap(go);
-    AddPassenger(go);
+    _staticPassengers.insert(go);
 
     //sScriptMgr->OnAddCreaturePassenger(this, go);
     return go;
@@ -269,6 +279,28 @@ void Transport::CalculatePassengerOffset(float& x, float& y, float& z, float& o)
     y = (iny - inx * tan(GetOrientation())) / (cos(GetOrientation()) - sin(GetOrientation() + M_PI) * tan(GetOrientation()));
     x = (inx - iny * sin(GetOrientation() + M_PI) / cos(GetOrientation())) / (cos(GetOrientation()) - tan(GetOrientation()) * sin(GetOrientation() + M_PI));
     MapManager::NormalizeOrientation(o);
+}
+
+void Transport::UpdatePosition(float x, float y, float z, float o)
+{
+    bool newActive = GetMap()->IsGridLoaded(x, y);
+
+    Relocate(x, y, z, o);
+
+    UpdatePassengerPositions(_passengers);
+
+    /* There are four possible scenarios:
+      - transport moves from inactive to active grid
+      - the grid that transport is currently in becomes active
+      - transport moves from active to inactive grid
+      - the grid that transport is currently in unloads (this case is handled by grid unloading)
+    */
+    if (_staticPassengers.empty() && newActive)
+        LoadStaticPassengers();
+    else if (!_staticPassengers.empty() && !newActive && Cell(x, y).DiffGrid(Cell(GetPositionX(), GetPositionY())))
+        UnloadStaticPassengers();
+    else
+        UpdatePassengerPositions(_staticPassengers);
 }
 
 void Transport::MoveToNextWayPoint()
@@ -315,26 +347,52 @@ void Transport::TeleportTransport(uint32 newMapid, float x, float y, float z)
 {
     Map const* oldMap = GetMap();
 
-    // TODO: Teleport players, move current map's non-player passengers out of passenger lists and put new map's passengers on transport
-    // On retail, non-player passengers are not moved across maps
-
-    //we need to create and save new Map object with 'newMapid' because if not done -> lead to invalid Map object reference...
-    //player far teleport would try to create same instance, but we need it NOW for transport...
+    // we need to create and save new Map object with 'newMapid' because if not done -> lead to invalid Map object reference...
+    // player far teleport would try to create same instance, but we need it NOW for transport...
     if (oldMap->GetId() != newMapid)
     {
         Map* newMap = sMapMgr->CreateBaseMap(newMapid);
-        GetMap()->RemoveFromMap<GameObject>(this, false);
+        Map::PlayerList const& oldPlayers = GetMap()->GetPlayers();
+        if (!oldPlayers.isEmpty())
+        {
+            UpdateData data;
+            BuildOutOfRangeUpdateBlock(&data);
+            WorldPacket packet;
+            data.BuildPacket(&packet);
+            for (Map::PlayerList::const_iterator itr = oldPlayers.begin(); itr != oldPlayers.end(); ++itr)
+                if (itr->getSource()->GetTransport() != this)
+                    itr->getSource()->SendDirectMessage(&packet);
+        }
+
+        GetMap()->RemoveFromMap<Transport>(this, false);
         SetMap(newMap);
-        GetMap()->AddToMap<GameObject>(this);
+
+        Map::PlayerList const& newPlayers = GetMap()->GetPlayers();
+        if (!newPlayers.isEmpty())
+        {
+            for (Map::PlayerList::const_iterator itr = newPlayers.begin(); itr != newPlayers.end(); ++itr)
+            {
+                if (itr->getSource()->GetTransport() != this)
+                {
+                    UpdateData data;
+                    BuildCreateUpdateBlockForPlayer(&data, itr->getSource());
+                    WorldPacket packet;
+                    data.BuildPacket(&packet);
+                    itr->getSource()->SendDirectMessage(&packet);
+                }
+            }
+        }
+
+        GetMap()->AddToMap<Transport>(this);
     }
 
-    GetMap()->GameObjectRelocation(this, x, y, z, GetOrientation());
+    UpdatePosition(x, y, z, GetOrientation());
     MoveToNextWayPoint();
 }
 
-void Transport::UpdatePassengerPositions()
+void Transport::UpdatePassengerPositions(std::set<WorldObject*>& passengers)
 {
-    for (std::set<WorldObject*>::iterator itr = _passengers.begin(); itr != _passengers.end(); ++itr)
+    for (std::set<WorldObject*>::iterator itr = passengers.begin(); itr != passengers.end(); ++itr)
     {
         WorldObject* passenger = *itr;
         // transport teleported but passenger not yet (can happen for players)
@@ -382,5 +440,35 @@ void Transport::DoEventIfAny(KeyFrame const& node, bool departure)
         sLog->outDebug(LOG_FILTER_MAPSCRIPTS, "Taxi %s event %u of node %u of %s path", departure ? "departure" : "arrival", eventid, node.Node->index, GetName());
         GetMap()->ScriptsStart(sEventScripts, eventid, this, this);
         EventInform(eventid);
+    }
+}
+
+void Transport::LoadStaticPassengers()
+{
+    if (uint32 mapId = GetGOInfo()->moTransport.mapID)
+    {
+        CellObjectGuidsMap const& cells = sObjectMgr->GetMapObjectGuids(mapId, GetMap()->GetSpawnMode());
+        CellGuidSet::const_iterator guidEnd;
+        for (CellObjectGuidsMap::const_iterator cellItr = cells.begin(); cellItr != cells.end(); ++cellItr)
+        {
+            // Creatures on transport
+            guidEnd = cellItr->second.creatures.end();
+            for (CellGuidSet::const_iterator guidItr = cellItr->second.creatures.begin(); guidItr != guidEnd; ++guidItr)
+                CreateNPCPassenger(*guidItr, sObjectMgr->GetCreatureData(*guidItr));
+
+            // GameObjects on transport
+            guidEnd = cellItr->second.gameobjects.end();
+            for (CellGuidSet::const_iterator guidItr = cellItr->second.gameobjects.begin(); guidItr != guidEnd; ++guidItr)
+                CreateGOPassenger(*guidItr, sObjectMgr->GetGOData(*guidItr));
+        }
+    }
+}
+
+void Transport::UnloadStaticPassengers()
+{
+    while (!_staticPassengers.empty())
+    {
+        WorldObject* obj = *_staticPassengers.begin();
+        obj->AddObjectToRemoveList();   // also removes from _staticPassengers
     }
 }

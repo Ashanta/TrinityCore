@@ -41,8 +41,8 @@ class Transport : public GameObject
         void RemovePassenger(WorldObject* passenger);
         std::set<WorldObject*> const& GetPassengers() const { return _passengers; }
 
-        Creature* CreateNPCPassenger(uint32 guid, uint32 entry, float x, float y, float z, float o, CreatureData const* data = NULL);
-        GameObject* CreateGOPassenger(uint32 guid, uint32 entry, float x, float y, float z, float o, GameObjectData const* data = NULL);
+        Creature* CreateNPCPassenger(uint32 guid, CreatureData const* data);
+        GameObject* CreateGOPassenger(uint32 guid, GameObjectData const* data);
         void CalculatePassengerPosition(float& x, float& y, float& z, float& o);
         void CalculatePassengerOffset(float& x, float& y, float& z, float& o);
 
@@ -51,11 +51,20 @@ class Transport : public GameObject
         uint32 GetTimer() const { return _moveTimer; }
 
         KeyFrameVec const& GetKeyFrames() const { return _transportInfo->keyFrames; }
+
+        void UpdatePosition(float x, float y, float z, float o);
+
+        //! Needed when transport moves from inactive to active grid
+        void LoadStaticPassengers();
+
+        //! Needed when transport enters inactive grid
+        void UnloadStaticPassengers();
+
     private:
         void MoveToNextWayPoint();
         float CalculateSegmentPos(float perc);
         void TeleportTransport(uint32 newMapid, float x, float y, float z);
-        void UpdatePassengerPositions();
+        void UpdatePassengerPositions(std::set<WorldObject*>& passengers);
         void DoEventIfAny(KeyFrame const& node, bool departure);
 
         bool IsMoving() const { return _isMoving; }
@@ -70,9 +79,7 @@ class Transport : public GameObject
         bool _isMoving;
 
         std::set<WorldObject*> _passengers;
-
-        // this stores all non-player passengers that don't belong on current map
-        UNORDERED_MAP<Map*, std::set<WorldObject*> > _mapPassengers;
+        std::set<WorldObject*> _staticPassengers;
 };
 
 #endif

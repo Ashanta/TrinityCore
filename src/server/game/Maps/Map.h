@@ -412,26 +412,9 @@ class Map : public GridRefManager<NGridType>
         template<class T>
         void AddToActive(T* obj);
 
-        void AddToUpdating(WorldObject* obj);
-
         // must called with RemoveFromWorld
         template<class T>
         void RemoveFromActive(T* obj);
-
-        void RemoveFromUpdating(WorldObject* obj)
-        {
-            if (_updatingObjectsIter != _updatingObjects.end())
-            {
-                UpdatingObjectsContainer::iterator itr = _updatingObjects.find(obj);
-                if (itr == _updatingObjects.end())
-                    return;
-                if (itr == _updatingObjectsIter)
-                    ++_updatingObjectsIter;
-                _updatingObjects.erase(itr);
-            }
-            else
-                _updatingObjects.erase(obj);
-        }
 
         template<class T> void SwitchGridContainers(T* obj, bool on);
         template<class NOTIFIER> void VisitAll(const float &x, const float &y, float radius, NOTIFIER &notifier);
@@ -501,6 +484,9 @@ class Map : public GridRefManager<NGridType>
 
         void SendInitSelf(Player* player);
 
+        void SendInitTransports(Player* player);
+        void SendRemoveTransports(Player* player);
+
         bool CreatureCellRelocation(Creature* creature, Cell new_cell);
         bool GameObjectCellRelocation(GameObject* go, Cell new_cell);
 
@@ -522,9 +508,6 @@ class Map : public GridRefManager<NGridType>
         void EnsureGridLoadedForActiveObject(Cell const&, WorldObject* object);
 
         void buildNGridLinkage(NGridType* pNGridType) { pNGridType->link(this); }
-
-        template<class T> void AddType(T *obj);
-        template<class T> void RemoveType(T *obj, bool);
 
         NGridType* getNGrid(uint32 x, uint32 y) const
         {
@@ -562,9 +545,9 @@ class Map : public GridRefManager<NGridType>
         ActiveNonPlayers::iterator m_activeNonPlayersIter;
 
         // Objects that must update even in inactive grids without activating them
-        typedef std::set<WorldObject*> UpdatingObjectsContainer;
-        UpdatingObjectsContainer _updatingObjects;
-        UpdatingObjectsContainer::iterator _updatingObjectsIter;
+        typedef std::set<Transport*> TransportsContainer;
+        TransportsContainer _transports;
+        TransportsContainer::iterator _transportsUpdateIter;
 
     private:
         Player* _GetScriptPlayerSourceOrTarget(Object* source, Object* target, const ScriptInfo* scriptInfo) const;
@@ -600,13 +583,16 @@ class Map : public GridRefManager<NGridType>
 
         // Type specific code for add/remove to/from grid
         template<class T>
-            void AddToGrid(T* object, Cell const& cell);
+        void AddToGrid(T* object, Cell const& cell);
 
         template<class T>
-            void DeleteFromWorld(T*);
+        void DeleteFromWorld(T*);
 
         template<class T>
-        void AddToActiveHelper(T* obj);
+        void AddToActiveHelper(T* obj)
+        {
+            m_activeNonPlayers.insert(obj);
+        }
 
         template<class T>
         void RemoveFromActiveHelper(T* obj)

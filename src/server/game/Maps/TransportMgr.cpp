@@ -335,36 +335,12 @@ Transport* TransportMgr::CreateTransport(uint32 entry, Map* map /*= NULL*/)
 
     // use preset map for instances (need to know which instance)
     trans->SetMap(map ? map : sMapMgr->CreateMap(mapId, NULL));
-    trans->SetZoneScript();
-    trans->GetMap()->LoadGrid(x, y);
+    if (map && map->IsDungeon())
+        trans->m_zoneScript = map->ToInstanceMap()->GetInstanceScript();
 
-    // Get all spawns on Transport map
-    if (uint32 mapId = trans->GetGOInfo()->moTransport.mapID)
-    {
-        CellObjectGuidsMap const& cells = sObjectMgr->GetMapObjectGuids(mapId, REGULAR_DIFFICULTY);
-        CellGuidSet::const_iterator guidEnd;
-        for (CellObjectGuidsMap::const_iterator cellItr = cells.begin(); cellItr != cells.end(); ++cellItr)
-        {
-            // Creatures on transport
-            guidEnd = cellItr->second.creatures.end();
-            for (CellGuidSet::const_iterator guidItr = cellItr->second.creatures.begin(); guidItr != guidEnd; ++guidItr)
-            {
-                CreatureData const* data = sObjectMgr->GetCreatureData(*guidItr);
-                trans->CreateNPCPassenger(*guidItr, data->id, data->posX, data->posY, data->posZ, data->orientation, data);
-            }
+    // Passengers will be loaded once a player is near
 
-            // GameObjects on transport
-            guidEnd = cellItr->second.gameobjects.end();
-            for (CellGuidSet::const_iterator guidItr = cellItr->second.gameobjects.begin(); guidItr != guidEnd; ++guidItr)
-            {
-                GameObjectData const* data = sObjectMgr->GetGOData(*guidItr);
-                trans->CreateGOPassenger(*guidItr, data->id, data->posX, data->posY, data->posZ, data->orientation, data);
-            }
-        }
-    }
-
-    trans->SetAlwaysUpdating(true);
-    trans->GetMap()->AddToMap<GameObject>(trans);
+    trans->GetMap()->AddToMap<Transport>(trans);
     return trans;
 }
 

@@ -29,11 +29,11 @@
 #include "ScriptMgr.h"
 #include "CreatureAISelector.h"
 #include "Group.h"
-
+#include "Transport.h"
 #include "GameObjectModel.h"
 #include "DynamicTree.h"
 
-GameObject::GameObject(bool isWorldObject /*= false*/) : WorldObject(isWorldObject), MapObject(),
+GameObject::GameObject() : WorldObject(false), MapObject(),
     m_model(NULL), m_goValue(new GameObjectValue()), m_AI(NULL)
 {
     m_objectType |= TYPEMASK_GAMEOBJECT;
@@ -99,6 +99,9 @@ void GameObject::CleanupsBeforeDelete(bool /*finalCleanup*/)
 
     if (m_uint32Values)                                      // field array can be not exist if GameOBject not loaded
         RemoveFromOwner();
+
+    if (GetTransport() && !ToTransport())
+        GetTransport()->RemovePassenger(this);
 }
 
 void GameObject::RemoveFromOwner()
