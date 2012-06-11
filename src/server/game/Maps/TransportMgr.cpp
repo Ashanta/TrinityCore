@@ -317,7 +317,7 @@ Transport* TransportMgr::CreateTransport(uint32 entry, Map* map /*= NULL*/)
     float o = 1.0f;
 
     // initialize the gameobject base
-    if (!trans->Create(sObjectMgr->GenerateLowGuid(HIGHGUID_MO_TRANSPORT), entry, mapId, x, y, z, o, 100, 0))
+    if (!trans->Create(sObjectMgr->GenerateLowGuid(HIGHGUID_MO_TRANSPORT), entry, mapId, x, y, z, o, 255))
     {
         delete trans;
         return NULL;

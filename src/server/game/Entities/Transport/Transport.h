@@ -34,7 +34,7 @@ class Transport : public GameObject
     public:
         ~Transport();
 
-        bool Create(uint32 guidlow, uint32 entry, uint32 mapid, float x, float y, float z, float ang, uint32 animprogress, uint32 dynflags);
+        bool Create(uint32 guidlow, uint32 entry, uint32 mapid, float x, float y, float z, float ang, uint32 animprogress);
         void Update(uint32 diff);
 
         void AddPassenger(WorldObject* passenger);
@@ -67,6 +67,7 @@ class Transport : public GameObject
         void UpdatePassengerPositions(std::set<WorldObject*>& passengers);
         void DoEventIfAny(KeyFrame const& node, bool departure);
 
+        //! Helpers to know if stop frame was reached
         bool IsMoving() const { return _isMoving; }
         void SetMoving(bool val) { _isMoving = val; }
 
