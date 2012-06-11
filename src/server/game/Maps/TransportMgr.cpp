@@ -279,7 +279,7 @@ void TransportMgr::GeneratePath(GameObjectTemplate const* goInfo, TransportTempl
     }
 
     transport->pathTime = keyFrames.back().DepartureTime;
-    WorldDatabase.DirectPExecute("UPDATE `transports` SET `period_gen`=%u WHERE `entry`=%u", transport->pathTime, transport->entry);
+    //WorldDatabase.DirectPExecute("UPDATE `transports` SET `period_gen`=%u WHERE `entry`=%u", transport->pathTime, transport->entry);
     //if (keyFrames.back().IsStopFrame())
     //    transport->pathTime += keyFrames.back().node->delay * IN_MILLISECONDS;
 }
