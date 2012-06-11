@@ -50,7 +50,7 @@
 #include "Group.h"
 #include "MoveSplineInit.h"
 #include "MoveSpline.h"
-// apply implementation of the singletons
+#include "Transport.h"
 
 TrainerSpell const* TrainerSpellData::Find(uint32 spell_id) const
 {
@@ -1042,7 +1042,8 @@ void Creature::SaveToDB()
         return;
     }
 
-    SaveToDB(GetMapId(), data->spawnMask, GetPhaseMask());
+    uint32 mapId = GetTransport() ? GetTransport()->GetGOInfo()->moTransport.mapID : GetMapId();
+    SaveToDB(mapId, data->spawnMask, GetPhaseMask());
 }
 
 void Creature::SaveToDB(uint32 mapid, uint8 spawnMask, uint32 phaseMask)
@@ -1081,10 +1082,21 @@ void Creature::SaveToDB(uint32 mapid, uint8 spawnMask, uint32 phaseMask)
     data.phaseMask = phaseMask;
     data.displayid = displayId;
     data.equipmentId = GetEquipmentId();
-    data.posX = GetPositionX();
-    data.posY = GetPositionY();
-    data.posZ = GetPositionZMinusOffset();
-    data.orientation = GetOrientation();
+    if (!GetTransport())
+    {
+        data.posX = GetPositionX();
+        data.posY = GetPositionY();
+        data.posZ = GetPositionZMinusOffset();
+        data.orientation = GetOrientation();
+    }
+    else
+    {
+        data.posX = GetTransOffsetX();
+        data.posY = GetTransOffsetY();
+        data.posZ = GetTransOffsetZ();
+        data.orientation = GetTransOffsetO();
+    }
+
     data.spawntimesecs = m_respawnDelay;
     // prevent add data integrity problems
     data.spawndist = GetDefaultMovementType() == IDLE_MOTION_TYPE ? 0.0f : m_respawnradius;

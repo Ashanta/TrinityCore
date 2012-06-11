@@ -482,7 +482,7 @@ void Map::InitializeObject(GameObject* obj)
 }
 
 template<class T>
-bool Map::AddToMap(T *obj)
+bool Map::AddToMap(T* obj)
 {
     //TODO: Needs clean up. An object should not be added to map twice.
     if (obj->IsInWorld())
@@ -527,28 +527,20 @@ bool Map::AddToMap(T *obj)
 }
 
 template<>
-bool Map::AddToMap(Transport *obj)
+bool Map::AddToMap(Transport* obj)
 {
     //TODO: Needs clean up. An object should not be added to map twice.
     if (obj->IsInWorld())
         return true;
 
     CellCoord cellCoord = Trinity::ComputeCellCoord(obj->GetPositionX(), obj->GetPositionY());
-    //It will create many problems (including crashes) if an object is not added to grid after creation
-    //The correct way to fix it is to make AddToMap return false and delete the object if it is not added to grid
-    //But now AddToMap is used in too many places, I will just see how many ASSERT failures it will cause
-    ASSERT(cellCoord.IsCoordValid());
     if (!cellCoord.IsCoordValid())
     {
         sLog->outError("Map::Add: Object " UI64FMTD " has invalid coordinates X:%f Y:%f grid cell [%u:%u]", obj->GetGUID(), obj->GetPositionX(), obj->GetPositionY(), cellCoord.x_coord, cellCoord.y_coord);
         return false; //Should delete object
     }
 
-    Cell cell(cellCoord);
-    sLog->outStaticDebug("Object %u enters grid[%u, %u]", GUID_LOPART(obj->GetGUID()), cell.GridX(), cell.GridY());
-
     obj->AddToWorld();
-
     _transports.insert(obj);
 
     return true;
@@ -1219,7 +1211,7 @@ bool Map::GameObjectRespawnRelocation(GameObject* go, bool diffGridOnly)
     go->GetRespawnPosition(resp_x, resp_y, resp_z, &resp_o);
     Cell resp_cell(resp_x, resp_y);
 
-    //creature will be unloaded with grid
+    //GameObject will be unloaded with grid
     if (diffGridOnly && !go->GetCurrentCell().DiffGrid(resp_cell))
         return true;
 
@@ -1231,7 +1223,6 @@ bool Map::GameObjectRespawnRelocation(GameObject* go, bool diffGridOnly)
     if (GameObjectCellRelocation(go, resp_cell))
     {
         go->Relocate(resp_x, resp_y, resp_z, resp_o);
-        //CreatureRelocationNotify(c, resp_cell, resp_cell.GetCellCoord());
         go->UpdateObjectVisibility(false);
         return true;
     }
