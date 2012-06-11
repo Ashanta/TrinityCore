@@ -474,6 +474,8 @@ class Map : public GridRefManager<NGridType>
         void LoadRespawnTimes();
         void DeleteRespawnTimes();
 
+        static void DeleteRespawnTimesInDB(uint16 mapId, uint32 instanceId);
+
     private:
         void LoadMapAndVMap(int gx, int gy);
         void LoadVMap(int gx, int gy);
