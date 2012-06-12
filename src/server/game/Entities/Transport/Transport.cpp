@@ -257,23 +257,23 @@ GameObject* Transport::CreateGOPassenger(uint32 guid, GameObjectData const* data
 void Transport::CalculatePassengerPosition(float& x, float& y, float& z, float& o)
 {
     float inx = x, iny = y, inz = z, ino = o;
-    o = GetOrientation() + ino;
     x = GetPositionX() + inx * cos(GetOrientation()) - iny * sin(GetOrientation());
     y = GetPositionY() + iny * cos(GetOrientation()) + inx * sin(GetOrientation());
     z = GetPositionZ() + inz;
+    o = GetOrientation() + ino;
     MapManager::NormalizeOrientation(o);
 }
 
 //! This method transforms supplied global coordinates into local offsets
 void Transport::CalculatePassengerOffset(float& x, float& y, float& z, float& o)
 {
-    o -= GetOrientation();
-    z -= GetPositionZ();
-    y -= GetPositionY();    // y = searchedY * cos(o) + searchedX * sin(o)
     x -= GetPositionX();    // x = searchedX * cos(o) - searchedY * sin(o)
+    y -= GetPositionY();    // y = searchedY * cos(o) + searchedX * sin(o)
+    z -= GetPositionZ();
+    o -= GetOrientation();
     float inx = x, iny = y;
     y = (iny - inx * tan(GetOrientation())) / (cos(GetOrientation()) + sin(GetOrientation()) * tan(GetOrientation()));
-    x = (inx + iny * tan(GetOrientation())) / (cos(GetOrientation()) - sin(GetOrientation()) * tan(GetOrientation()));
+    x = (inx + iny * tan(GetOrientation())) / (cos(GetOrientation()) + sin(GetOrientation()) * tan(GetOrientation()));
     MapManager::NormalizeOrientation(o);
 }
 
