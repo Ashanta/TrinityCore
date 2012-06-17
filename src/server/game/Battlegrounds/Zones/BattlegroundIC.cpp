@@ -380,8 +380,8 @@ bool BattlegroundIC::SetupBattleground()
         return false;
     }
 
-    gunshipHorde = sTransportMgr->CreateTransport(GO_HORDE_GUNSHIP, GetBgMap());
-    gunshipAlliance = sTransportMgr->CreateTransport(GO_ALLIANCE_GUNSHIP, GetBgMap());
+    gunshipHorde = sTransportMgr->CreateTransport(GO_HORDE_GUNSHIP, 0, GetBgMap());
+    gunshipAlliance = sTransportMgr->CreateTransport(GO_ALLIANCE_GUNSHIP, 0, GetBgMap());
 
     if (!gunshipAlliance || !gunshipHorde)
     {

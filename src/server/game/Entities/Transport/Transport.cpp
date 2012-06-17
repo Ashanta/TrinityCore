@@ -73,6 +73,8 @@ bool Transport::Create(uint32 guidlow, uint32 entry, uint32 mapid, float x, floa
     // initialize waypoints
     _nextFrame = tInfo->keyFrames.begin();
     _currentFrame = _nextFrame++;
+    _triggeredArrivalEvent = false;
+    _triggeredDepartureEvent = false;
 
     SetFloatValue(OBJECT_FIELD_SCALE_X, goinfo->size);
     SetUInt32Value(GAMEOBJECT_FACTION, goinfo->faction);
@@ -82,7 +84,6 @@ bool Transport::Create(uint32 guidlow, uint32 entry, uint32 mapid, float x, floa
     SetDisplayId(goinfo->displayId);
     SetGoState(GO_STATE_READY);
     SetGoType(GAMEOBJECT_TYPE_MO_TRANSPORT);
-
     SetGoAnimProgress(animprogress);
     SetName(goinfo->name);
     return true;
@@ -110,35 +111,47 @@ void Transport::Update(uint32 diff)
     uint32 timer = _moveTimer % GetPeriod();
 
     // Set current waypoint
-    while (timer > _nextFrame->PathTime || timer < _currentFrame->DepartureTime)
+    // Desired outcome: _currentFrame->DepartureTime < timer < _nextFrame->ArriveTime
+    // ... arrive | ... delay ... | departure
+    //      event /         event /
+    for (;;)
     {
-        // arrived at next stop point
-        if (_transportInfo->pathTime > _nextFrame->PathTime && timer < _nextFrame->DepartureTime)
+        if (timer >= _currentFrame->ArriveTime)
         {
-            if (IsMoving())
+            if (!_triggeredArrivalEvent)
+            {
+                DoEventIfAny(*_currentFrame, false);
+                _triggeredArrivalEvent = true;
+            }
+
+            if (timer < _currentFrame->DepartureTime)
             {
                 SetMoving(false);
-                DoEventIfAny(*_currentFrame, false);
+                break;  // its a stop frame and we are waiting
             }
-            break;
         }
 
+        if (timer >= _currentFrame->DepartureTime && !_triggeredDepartureEvent)
+        {
+            DoEventIfAny(*_currentFrame, true); // departure event
+            _triggeredDepartureEvent = true;
+        }
 
-        MoveToNextWayPoint();
+        if (timer >= _currentFrame->DepartureTime && timer < _currentFrame->NextArriveTime)
+            break;  // found current waypoint
 
+        MoveToNextWaypoint();
+
+        // not waiting anymore
         SetMoving(true);
 
-        DoEventIfAny(*_currentFrame, true);
-
-        // first check help in case client-server transport coordinates de-synchronization
+        // Departure event
         if (_currentFrame->IsTeleportFrame())
             TeleportTransport(_nextFrame->Node->mapid, _nextFrame->Node->x, _nextFrame->Node->y, _nextFrame->Node->z);
 
-        ASSERT(_nextFrame != GetKeyFrames().begin());
-
         sScriptMgr->OnRelocate(this, _currentFrame->Node->index, _currentFrame->Node->mapid, _currentFrame->Node->x, _currentFrame->Node->y, _currentFrame->Node->z);
 
-        sLog->outDebug(LOG_FILTER_TRANSPORTS, "%s moved to %f %f %f %d", GetName(), GetPositionX(), GetPositionY(), GetPositionZ(), _currentFrame->Node->mapid);
+        sLog->outDebug(LOG_FILTER_TRANSPORTS, "Transport %u (%s) moved to node %u %u %f %f %f", GetEntry(), GetName(), _currentFrame->Node->index, _currentFrame->Node->mapid, _currentFrame->Node->x, _currentFrame->Node->y, _currentFrame->Node->z);
     }
 
     // Set position
@@ -148,7 +161,7 @@ void Transport::Update(uint32 diff)
         _positionChangeTimer.Reset(POSITION_UPDATE_DELAY);
         if (IsMoving())
         {
-            float t = CalculateSegmentPos((float)timer/(float)IN_MILLISECONDS);
+            float t = CalculateSegmentPos(float(timer) * 0.001f);
             G3D::Vector3 pos, dir;
             _currentFrame->Spline->evaluate_percent(_currentFrame->Index, t, pos);
             _currentFrame->Spline->evaluate_derivative(_currentFrame->Index, t, dir);
@@ -330,8 +343,13 @@ void Transport::UnloadStaticPassengers()
     }
 }
 
-void Transport::MoveToNextWayPoint()
+void Transport::MoveToNextWaypoint()
 {
+    // Clear events flagging
+    _triggeredArrivalEvent = false;
+    _triggeredDepartureEvent = false;
+
+    // Set frames
     _currentFrame = _nextFrame++;
     if (_nextFrame == GetKeyFrames().end())
         _nextFrame = GetKeyFrames().begin();
@@ -340,8 +358,6 @@ void Transport::MoveToNextWayPoint()
 float Transport::CalculateSegmentPos(float now)
 {
     KeyFrame const& frame = *_currentFrame;
-    //return (GetTimer() % GetPeriod() - frame.DepartureTime) / (frame.TimeTo * IN_MILLISECONDS);
-
     const float speed = float(m_goInfo->moTransport.moveSpeed);
     const float accel = float(m_goInfo->moTransport.accelRate);
     float timeSinceStop = frame.TimeFrom + (now - (1.0f/IN_MILLISECONDS) * frame.DepartureTime);
@@ -367,7 +383,7 @@ float Transport::CalculateSegmentPos(float now)
         segmentPos = frame.DistUntilStop - dist;
     }
 
-    return segmentPos / _nextFrame->DistFromPrev;
+    return segmentPos / frame.NextDistFromPrev;
 }
 
 void Transport::TeleportTransport(uint32 newMapid, float x, float y, float z)
@@ -389,6 +405,7 @@ void Transport::TeleportTransport(uint32 newMapid, float x, float y, float z)
                     itr->getSource()->SendDirectMessage(&packet);
         }
 
+        UnloadStaticPassengers();
         GetMap()->RemoveFromMap<Transport>(this, false);
         SetMap(newMap);
 
@@ -463,7 +480,6 @@ void Transport::TeleportTransport(uint32 newMapid, float x, float y, float z)
     }
 
     UpdatePosition(x, y, z, GetOrientation());
-    MoveToNextWayPoint();
 }
 
 void Transport::UpdatePassengerPositions(std::set<WorldObject*>& passengers)

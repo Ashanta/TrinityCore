@@ -28,7 +28,7 @@
 
 class Transport : public GameObject
 {
-        friend Transport* TransportMgr::CreateTransport(uint32, Map*);
+        friend Transport* TransportMgr::CreateTransport(uint32, uint32, Map*);
 
         Transport();
     public:
@@ -61,7 +61,7 @@ class Transport : public GameObject
         void UnloadStaticPassengers();
 
     private:
-        void MoveToNextWayPoint();
+        void MoveToNextWaypoint();
         float CalculateSegmentPos(float perc);
         void TeleportTransport(uint32 newMapid, float x, float y, float z);
         void UpdatePassengerPositions(std::set<WorldObject*>& passengers);
@@ -78,6 +78,10 @@ class Transport : public GameObject
         uint32 _moveTimer;
         TimeTrackerSmall _positionChangeTimer;
         bool _isMoving;
+
+        //! These are needed to properly control events triggering only once for each frame
+        bool _triggeredArrivalEvent;
+        bool _triggeredDepartureEvent;
 
         std::set<WorldObject*> _passengers;
         std::set<WorldObject*> _staticPassengers;

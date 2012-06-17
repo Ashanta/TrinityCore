@@ -36,7 +36,7 @@ struct KeyFrame
 {
     explicit KeyFrame(TaxiPathNodeEntry const& _node) : Node(&_node),
         DistSinceStop(-1.0f), DistUntilStop(-1.0f), DistFromPrev(-1.0f), TimeFrom(0.0f), TimeTo(0.0f),
-        Teleport(false), PathTime(0), DepartureTime(0), Spline(NULL)
+        Teleport(false), ArriveTime(0), DepartureTime(0), Spline(NULL), NextDistFromPrev(0.0f), NextArriveTime(0)
     {
     }
 
@@ -48,9 +48,13 @@ struct KeyFrame
     float TimeFrom;
     float TimeTo;
     bool Teleport;
-    uint32 PathTime;
+    uint32 ArriveTime;
     uint32 DepartureTime;
     Movement::Spline<double>* Spline;
+
+    // Data needed for next frame
+    float NextDistFromPrev;
+    uint32 NextArriveTime;
 
     bool IsTeleportFrame() const { return Teleport; }
     bool IsStopFrame() const { return Node->actionFlag == 2; }
@@ -77,7 +81,7 @@ class TransportMgr
         void LoadTransportTemplates();
 
         // Creates a transport using given GameObject template entry
-        Transport* CreateTransport(uint32 entry, Map* map = NULL);
+        Transport* CreateTransport(uint32 entry, uint32 guid = 0, Map* map = NULL);
 
         // Spawns all continent transports, used at core startup
         void SpawnContinentTransports();

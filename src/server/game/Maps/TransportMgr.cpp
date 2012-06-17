@@ -141,6 +141,7 @@ void TransportMgr::GeneratePath(GameObjectTemplate const* goInfo, TransportTempl
         {
             keyFrames[i].Index = i + 1;
             keyFrames[i].DistFromPrev = spline->length(i, i + 1);
+            keyFrames[i - 1].NextDistFromPrev = keyFrames[i].DistFromPrev;
             keyFrames[i].Spline = spline;
             if (keyFrames[i].IsStopFrame())
             {
@@ -156,7 +157,7 @@ void TransportMgr::GeneratePath(GameObjectTemplate const* goInfo, TransportTempl
         size_t start = 0;
         for (size_t i = 1; i < keyFrames.size(); ++i)
         {
-            if (keyFrames[i-1].Teleport || i + 1 == keyFrames.size())
+            if (keyFrames[i - 1].Teleport || i + 1 == keyFrames.size())
             {
                 size_t extra = !keyFrames[i - 1].Teleport ? 1 : 0;
                 Movement::Spline<double>* spline = new Movement::Spline<double>();
@@ -166,13 +167,16 @@ void TransportMgr::GeneratePath(GameObjectTemplate const* goInfo, TransportTempl
                 {
                     keyFrames[j].Index = j - start + 1;
                     keyFrames[j].DistFromPrev = spline->length(j - start, j + 1 - start);
+                    if (j > 0)
+                        keyFrames[j - 1].NextDistFromPrev = keyFrames[j].DistFromPrev;
                     keyFrames[j].Spline = spline;
                 }
 
-                if (keyFrames[i-1].Teleport)
+                if (keyFrames[i - 1].Teleport)
                 {
                     keyFrames[i].Index = i - start + 1;
-                    keyFrames[i].DistFromPrev = 0;
+                    keyFrames[i].DistFromPrev = 0.0f;
+                    keyFrames[i - 1].NextDistFromPrev = 0.0f;
                     keyFrames[i].Spline = spline;
                 }
 
@@ -187,8 +191,9 @@ void TransportMgr::GeneratePath(GameObjectTemplate const* goInfo, TransportTempl
                 lastStop = i;
             }
         }
-
     }
+
+    keyFrames.back().NextDistFromPrev = keyFrames.front().DistFromPrev;
 
     // at stopping keyframes, we define distSinceStop == 0,
     // and distUntilStop is to the next stopping keyframe.
@@ -253,7 +258,7 @@ void TransportMgr::GeneratePath(GameObjectTemplate const* goInfo, TransportTempl
     }
 
     // calculate path times
-    keyFrames[0].PathTime = 0;
+    keyFrames[0].ArriveTime = 0;
     float curPathTime = 0.0f;
     if (keyFrames[0].IsStopFrame())
     {
@@ -266,25 +271,26 @@ void TransportMgr::GeneratePath(GameObjectTemplate const* goInfo, TransportTempl
         curPathTime += keyFrames[i-1].TimeTo;
         if (keyFrames[i].IsStopFrame())
         {
-            keyFrames[i].PathTime = uint32(curPathTime * IN_MILLISECONDS);
+            keyFrames[i].ArriveTime = uint32(curPathTime * IN_MILLISECONDS);
+            keyFrames[i - 1].NextArriveTime = keyFrames[i].ArriveTime;
             curPathTime += (float)keyFrames[i].Node->delay;
             keyFrames[i].DepartureTime = uint32(curPathTime * IN_MILLISECONDS);
         }
         else
         {
             curPathTime -= keyFrames[i].TimeTo;
-            keyFrames[i].PathTime = uint32(curPathTime * IN_MILLISECONDS);
-            keyFrames[i].DepartureTime = keyFrames[i].PathTime;
+            keyFrames[i].ArriveTime = uint32(curPathTime * IN_MILLISECONDS);
+            keyFrames[i - 1].NextArriveTime = keyFrames[i].ArriveTime;
+            keyFrames[i].DepartureTime = keyFrames[i].ArriveTime;
         }
     }
+    keyFrames.back().NextArriveTime = keyFrames.back().DepartureTime;
 
     transport->pathTime = keyFrames.back().DepartureTime;
     //WorldDatabase.DirectPExecute("UPDATE `transports` SET `period_gen`=%u WHERE `entry`=%u", transport->pathTime, transport->entry);
-    //if (keyFrames.back().IsStopFrame())
-    //    transport->pathTime += keyFrames.back().node->delay * IN_MILLISECONDS;
 }
 
-Transport* TransportMgr::CreateTransport(uint32 entry, Map* map /*= NULL*/)
+Transport* TransportMgr::CreateTransport(uint32 entry, uint32 guid /*= 0*/, Map* map /*= NULL*/)
 {
     // instance case, execute GetGameObjectEntry hook
     if (map)
@@ -317,7 +323,8 @@ Transport* TransportMgr::CreateTransport(uint32 entry, Map* map /*= NULL*/)
     float o = 1.0f;
 
     // initialize the gameobject base
-    if (!trans->Create(sObjectMgr->GenerateLowGuid(HIGHGUID_MO_TRANSPORT), entry, mapId, x, y, z, o, 255))
+    uint32 guidLow = guid ? guid : sObjectMgr->GenerateLowGuid(HIGHGUID_MO_TRANSPORT);
+    if (!trans->Create(guidLow, entry, mapId, x, y, z, o, 255))
     {
         delete trans;
         return NULL;
@@ -351,12 +358,24 @@ void TransportMgr::SpawnContinentTransports()
 
     uint32 oldMSTime = getMSTime();
 
+    QueryResult result = WorldDatabase.Query("SELECT guid, entry FROM transports");
+
     uint32 count = 0;
-    for (TransportTemplates::const_iterator itr = _transportTemplates.begin(); itr != _transportTemplates.end(); ++itr)
-        // we can safely do this, verified on startup
-        if (!sObjectMgr->GetGameObjectTemplate(itr->first)->moTransport.inInstance)
-            if (CreateTransport(itr->first))
-                ++count;
+    if (result)
+    {
+        do
+        {
+            Field* fields = result->Fetch();
+            uint32 guid = fields[0].GetUInt32();
+            uint32 entry = fields[1].GetUInt32();
+
+            // we can safely do this, verified on startup
+            if (!sObjectMgr->GetGameObjectTemplate(entry)->moTransport.inInstance)
+                if (CreateTransport(entry, guid))
+                    ++count;
+
+        } while (result->NextRow());
+    }
 
     sLog->outString(">> Spawned %u continent transports in %u ms", count, GetMSTimeDiffToNow(oldMSTime));
     sLog->outString();
@@ -372,5 +391,5 @@ void TransportMgr::CreateInstanceTransports(Map* map)
 
     // create transports
     for (std::set<uint32>::const_iterator itr = mapTransports->second.begin(); itr != mapTransports->second.end(); ++itr)
-        CreateTransport(*itr, map);
+        CreateTransport(*itr, 0, map);
 }
