@@ -60,6 +60,8 @@ class Transport : public GameObject
         //! Needed when transport enters inactive grid
         void UnloadStaticPassengers();
 
+        void EnableMovement(bool enabled);
+
     private:
         void MoveToNextWaypoint();
         float CalculateSegmentPos(float perc);

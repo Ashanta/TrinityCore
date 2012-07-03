@@ -716,7 +716,10 @@ void Object::_BuildValuesUpdate(uint8 updatetype, ByteBuffer * data, UpdateMask*
                     else
                     {
                         // disable quest object
-                        *data << uint16(0);
+                        if (ToGameObject()->GetGOInfo()->type == GAMEOBJECT_TYPE_MO_TRANSPORT)
+                            *data << uint16((ToGameObject()->GetGoState() != GO_STATE_READY) ? GO_DYNFLAG_LO_STOPPED : 0);
+                        else
+                            *data << uint16(0);
                         *data << uint16(-1);
                     }
                 }

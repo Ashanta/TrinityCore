@@ -107,7 +107,10 @@ void Transport::Update(uint32 diff)
     if (GetKeyFrames().size() <= 1)
         return;
 
-    _moveTimer += diff;
+    //! Transport is stopped
+    if (GetGoState() == GO_STATE_READY)
+        _moveTimer += diff;
+
     uint32 timer = _moveTimer % GetPeriod();
 
     // Set current waypoint
@@ -340,6 +343,24 @@ void Transport::UnloadStaticPassengers()
     {
         WorldObject* obj = *_staticPassengers.begin();
         obj->AddObjectToRemoveList();   // also removes from _staticPassengers
+    }
+}
+
+void Transport::EnableMovement(bool enabled)
+{
+    SetGoState(enabled ? GO_STATE_READY : GO_STATE_ACTIVE);
+
+    //! Broadcast update
+    Map::PlayerList const& newPlayers = GetMap()->GetPlayers();
+    if (!newPlayers.isEmpty())
+    {
+        UpdateData data;
+        BuildValuesUpdateBlockForPlayer(&data, newPlayers.getFirst()->getSource()); // transport values are not conditioned, use any player and build packet once
+        WorldPacket packet;
+        data.BuildPacket(&packet);
+
+        for (Map::PlayerList::const_iterator itr = newPlayers.begin(); itr != newPlayers.end(); ++itr)
+            itr->getSource()->SendDirectMessage(&packet);
     }
 }
 

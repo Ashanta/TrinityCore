@@ -31,6 +31,7 @@ EndScriptData */
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
 #include "GossipDef.h"
+#include "Transport.h"
 
 #include <fstream>
 
@@ -90,6 +91,7 @@ public:
             { "areatriggers",   SEC_ADMINISTRATOR,  false, &HandleDebugAreaTriggersCommand,    "", NULL },
             { "los",            SEC_MODERATOR,      false, &HandleDebugLoSCommand,             "", NULL },
             { "moveflags",      SEC_ADMINISTRATOR,  false, &HandleDebugMoveflagsCommand,       "", NULL },
+            { "transport",      SEC_ADMINISTRATOR,  false, &HandleDebugTransportCommand,       "", NULL },
             { NULL,             SEC_PLAYER,         false, NULL,                               "", NULL }
         };
         static ChatCommand commandTable[] =
@@ -1328,6 +1330,30 @@ public:
         sLog->outSQLDev("(@PATH, XX, %.3f, %.3f, %.5f, 0,0, 0,100, 0),", player->GetPositionX(), player->GetPositionY(), player->GetPositionZ());
 
         handler->PSendSysMessage("Waypoint SQL written to SQL Developer log");
+        return true;
+    }
+
+    static bool HandleDebugTransportCommand(ChatHandler* handler, char const* args)
+    {
+        if (!*args)
+            return false;
+
+        Transport* transport = handler->GetSession()->GetPlayer()->GetTransport();
+        if (!transport)
+            return false;
+
+        bool start = false;
+        if (!stricmp(args, "stop"))
+            transport->EnableMovement(false);
+        else if (!stricmp(args, "start"))
+        {
+            transport->EnableMovement(true);
+            start = true;
+        }
+        else
+            return false;
+
+        handler->PSendSysMessage("Transport %s %s", transport->GetName(), start ? "started" : "stopped");
         return true;
     }
 };
