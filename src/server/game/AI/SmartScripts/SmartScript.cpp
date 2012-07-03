@@ -1391,7 +1391,11 @@ void SmartScript::ProcessAction(SmartScriptHolder& e, Unit* unit, uint32 var0, u
             if (!target)
             {
                 G3D::Vector3 dest(e.target.x, e.target.y, e.target.z);
-                dest = Movement::TransportPathTransform(*me, me->HasUnitMovementFlag(MOVEMENTFLAG_ONTRANSPORT) && me->GetTransGUID())(dest);
+                float unused = 0.0f;
+                if (e.action.MoveToPos.transport)
+                    if (Transport* trans = me->GetTransport())
+                        trans->CalculatePassengerPosition(dest.x, dest.y, dest.z, unused);
+
                 me->GetMotionMaster()->MovePoint(e.action.MoveToPos.pointId, dest.x, dest.y, dest.z);
             }
             else
