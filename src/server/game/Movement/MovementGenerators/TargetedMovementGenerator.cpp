@@ -25,6 +25,7 @@
 #include "MoveSplineInit.h"
 #include "MoveSpline.h"
 #include "Player.h"
+#include "Transport.h"
 
 #include <cmath>
 
@@ -88,6 +89,26 @@ void TargetedMovementGeneratorMedium<T,D>::_setTargetLocation(T &owner)
     i_recalculateTravel = false;
 
     Movement::MoveSplineInit init(owner);
+    if (owner.GetCharmerOrOwner() == GetTarget())   // using the same check as in EnterEvadeMode()
+    {
+        if (Transport* ownerTransport = i_target->GetTransport())
+        {
+            if (!owner.GetTransport() && ownerTransport->IsInRange(owner.GetPositionX(), owner.GetPositionY(), owner.GetPositionZ(), 0.0f))
+            {
+                ownerTransport->AddPassenger(&owner);
+                init.SetTransportEnter();
+            }
+        }
+        else
+        {
+            if (Transport* petTransport = owner.GetTransport())
+            {
+                petTransport->RemovePassenger(&owner);
+                init.SetTransportExit();
+            }
+        }
+    }
+
     init.MoveTo(x,y,z);
     init.SetWalk(((D*)this)->EnableWalking());
     init.Launch();
